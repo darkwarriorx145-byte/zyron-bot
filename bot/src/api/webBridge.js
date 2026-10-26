@@ -7,7 +7,7 @@ const db = require('../database/db');
 const API_KEY = process.env.BOT_API_KEY || process.env.ZYRON_API_KEY || '';
 const ENABLED = String(process.env.BOT_API_ENABLED || '').toLowerCase() === 'true' || Boolean(API_KEY);
 const HOST = process.env.BOT_API_HOST || '0.0.0.0';
-const PORT = parseInt(process.env.BOT_API_PORT || '4000', 10) || 4000;
+const PORT = parseInt(process.env.PORT || process.env.BOT_API_PORT || '4000', 10) || 4000;
 const PUBLIC_URL = process.env.BOT_API_PUBLIC_URL || '';
 const DASHBOARD_URL = process.env.DASHBOARD_URL || '';
 const ALLOWED_ORIGINS = String(process.env.DASHBOARD_ORIGIN || '*')
