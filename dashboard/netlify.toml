@@ -2,6 +2,11 @@
   publish = "public"
   functions = "netlify/functions"
 
+# These are configuration values, not secrets. Netlify's secrets scanner
+# flags their values when they also appear in docs and example files.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "DASHBOARD_PORT,OPENROUTER_MODEL,OPENROUTER_FALLBACK_MODEL,OPENROUTER_FALLBACK_MODEL_2,OPENROUTER_SITE_URL,DASHBOARD_PUBLIC_URL,BOT_API_URL,DISCORD_REDIRECT_URI"
+
 [functions]
   included_files = ["views/**", "lib/**", "public/**"]
 
