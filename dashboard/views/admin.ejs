@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zyron — Main Admin</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="app">
+  <aside class="sidebar">
+    <a class="brand" href="/dashboard">
+      <span class="brand-mark"><%- include('partials/icon', { name: 'shield', size: 22 }) %></span>
+      <span class="brand-text">
+        <strong>Zyron</strong>
+        <small>Control Center</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      <a class="nav-item" href="/dashboard">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'home', size: 18 }) %></span>
+        <span>Servers</span>
+      </a>
+      <a class="nav-item active" href="/admin">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'crown', size: 18 }) %></span>
+        <span>Admin Panel</span>
+      </a>
+      <a class="nav-item" href="/link-test">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'globe', size: 18 }) %></span>
+        <span>Link Test</span>
+      </a>
+      <a class="nav-item" href="<%= brand.invite %>" target="_blank" rel="noopener">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'message-circle', size: 18 }) %></span>
+        <span>Support Server</span>
+      </a>
+      <a class="nav-item" href="/logout">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'log-out', size: 18 }) %></span>
+        <span>Logout</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-user">
+      <img class="avatar avatar-sm" src="<%= user.avatarUrl %>" alt="">
+      <div class="sidebar-user-meta">
+        <strong><%= user.displayName %></strong>
+        <small>@<%= user.username %></small>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <span class="status-dot"></span>
+      <span>Powered by Zyra Nodes Limited</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Owner Access</p>
+        <h1>Main Admin</h1>
+        <p class="muted">Every server, every protection, one view.</p>
+      </div>
+      <div class="topbar-actions">
+        <span class="badge badge-warning"><%- include('partials/icon', { name: 'crown', size: 13 }) %> Main Owner</span>
+        <a class="btn btn-ghost" href="/dashboard">Back to Servers</a>
+      </div>
+    </header>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <span class="stat-icon"><%- include('partials/icon', { name: 'server', size: 20 }) %></span>
+        <strong><%= stats.total %></strong>
+        <span>Total Servers</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon"><%- include('partials/icon', { name: 'bot', size: 20 }) %></span>
+        <strong><%= stats.withBot %></strong>
+        <span>Bot Connected</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon"><%- include('partials/icon', { name: 'brain', size: 20 }) %></span>
+        <strong><%= stats.aiEnabled %></strong>
+        <span>AI Enabled</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon"><%- include('partials/icon', { name: 'users', size: 20 }) %></span>
+        <strong><%= stats.coOwners %></strong>
+        <span>Co-Owners</span>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-icon"><%- include('partials/icon', { name: 'folder', size: 18 }) %></span>
+          <div>
+            <h2>All Servers</h2>
+            <p class="muted">Read-only overview. Open a server from the dashboard to edit it.</p>
+          </div>
+        </div>
+        <span class="badge badge-soft"><%= servers.length %> rows</span>
+      </div>
+
+      <% if (servers.length === 0) { %>
+        <div class="empty">
+          <div class="empty-icon"><%- include('partials/icon', { name: 'inbox', size: 40 }) %></div>
+          <h3>No servers yet</h3>
+          <p class="muted">Invite Zyron to a server and it will appear here.</p>
+        </div>
+      <% } else { %>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Server</th>
+                <th>Prefix</th>
+                <th>Anti-Nuke</th>
+                <th>AI Guard</th>
+                <th>Nuke Punishment</th>
+                <th>Raid Punishment</th>
+                <th>Guards</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% servers.forEach(function (server) { %>
+                <tr>
+                  <td>
+                    <div class="table-server">
+                      <div class="server-icon server-icon-xs">
+                        <% if (server.iconUrl) { %>
+                          <img src="<%= server.iconUrl %>" alt="">
+                        <% } else { %>
+                          <span><%= server.name.charAt(0).toUpperCase() %></span>
+                        <% } %>
+                      </div>
+                      <div>
+                        <strong><%= server.name %></strong>
+                        <small class="muted"><%= server.id %></small>
+                      </div>
+                    </div>
+                  </td>
+                  <td><code><%= server.prefix %></code></td>
+                  <td><span class="pill <%= server.antiNuke ? 'pill-on' : 'pill-off' %>"><%= server.antiNuke ? 'On' : 'Off' %></span></td>
+                  <td><span class="pill <%= server.aiEnabled ? 'pill-on' : 'pill-off' %>"><%= server.aiEnabled ? 'On' : 'Off' %></span></td>
+                  <td><%= server.punishment %></td>
+                  <td><%= server.raidPunishment %></td>
+                  <td><%= server.protectedCount %>/24</td>
+                  <td>
+                    <span class="pill <%= server.hasBot ? 'pill-on' : 'pill-off' %>"><%= server.hasBot ? 'Online' : 'Missing' %></span>
+                  </td>
+                  <td>
+                    <a class="table-link" href="/server/<%= server.id %>">Manage</a>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+      <% } %>
+    </section>
+
+    <div class="split-grid">
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="card-icon"><%- include('partials/icon', { name: 'users', size: 18 }) %></span>
+            <div>
+              <h2>Co-Owners</h2>
+              <p class="muted">Global trusted users. Only the main owner can change this list.</p>
+            </div>
+          </div>
+        </div>
+
+        <% if (!coOwners || coOwners.length === 0) { %>
+          <p class="muted">No co-owners configured. Use <code>.owner add @user</code> in Discord.</p>
+        <% } else { %>
+          <ul class="list">
+            <% coOwners.forEach(function (id) { %>
+              <li class="list-item">
+                <span class="list-icon"><%- include('partials/icon', { name: 'user', size: 16 }) %></span>
+                <code><%= id %></code>
+              </li>
+            <% }); %>
+          </ul>
+        <% } %>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="card-icon"><%- include('partials/icon', { name: 'puzzle', size: 18 }) %></span>
+            <div>
+              <h2>System</h2>
+              <p class="muted">Deployment details for this dashboard.</p>
+            </div>
+          </div>
+        </div>
+        <ul class="list">
+          <li class="list-item">
+            <span class="list-icon"><%- include('partials/icon', { name: 'database', size: 16 }) %></span>
+            <div>
+              <strong>Bot database</strong>
+              <small class="muted break"><%= dbPath %></small>
+            </div>
+          </li>
+          <li class="list-item">
+            <span class="list-icon"><%- include('partials/icon', { name: 'key', size: 16 }) %></span>
+            <div>
+              <strong>Bot token</strong>
+              <small class="muted"><%= botConfigured ? 'Configured for live guild lookup' : 'Not configured, using database only' %></small>
+            </div>
+          </li>
+          <li class="list-item">
+            <span class="list-icon"><%- include('partials/icon', { name: 'brain', size: 16 }) %></span>
+            <div>
+              <strong>AI engine</strong>
+              <small class="muted">Configured per server from the server settings page.</small>
+            </div>
+          </li>
+        </ul>
+      </section>
+    </div>
+
+    <footer class="page-footer">
+      <span>Zyron <span class="dot" aria-hidden="true"></span> Powered by Zyra Nodes Limited</span>
+      <a href="<%= brand.invite %>" target="_blank" rel="noopener">Support</a>
+    </footer>
+  </main>
+</body>
+</html>

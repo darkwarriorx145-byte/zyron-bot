@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zyron — Notice</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="error-page">
+  <main class="error-card">
+    <div class="error-icon"><%- include('partials/icon', { name: 'shield', size: 44 }) %></div>
+    <p class="eyebrow">Zyron</p>
+    <h1>Something needs attention</h1>
+    <p class="muted"><%= message %></p>
+    <div class="error-actions">
+      <a class="btn btn-primary" href="/dashboard">Back to Servers</a>
+      <a class="btn btn-ghost" href="/login">Sign in again</a>
+    </div>
+    <p class="error-footer">Powered by Zyra Nodes Limited</p>
+  </main>
+</body>
+</html>

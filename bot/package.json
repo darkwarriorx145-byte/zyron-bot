@@ -1,0 +1,13 @@
+{
+  "name": "zyron-bot",
+  "version": "1.0.0",
+  "description": "Zyron - Discord Moderation, Anti-Nuke and AI Security Bot powered by Zyra Nodes Limited",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.4.5"
+  }
+}

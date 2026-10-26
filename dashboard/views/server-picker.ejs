@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zyron — Your Servers</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="app">
+  <aside class="sidebar">
+    <a class="brand" href="/dashboard">
+      <span class="brand-mark"><%- include('partials/icon', { name: 'shield', size: 22 }) %></span>
+      <span class="brand-text">
+        <strong>Zyron</strong>
+        <small>Control Center</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      <a class="nav-item active" href="/dashboard">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'home', size: 18 }) %></span>
+        <span>Servers</span>
+      </a>
+      <% if (user.isMainAdmin) { %>
+        <a class="nav-item" href="/admin">
+          <span class="nav-icon"><%- include('partials/icon', { name: 'crown', size: 18 }) %></span>
+          <span>Admin Panel</span>
+        </a>
+      <% } %>
+      <a class="nav-item" href="/link-test">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'globe', size: 18 }) %></span>
+        <span>Link Test</span>
+      </a>
+      <a class="nav-item" href="<%= brand.invite %>" target="_blank" rel="noopener">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'message-circle', size: 18 }) %></span>
+        <span>Support Server</span>
+      </a>
+      <a class="nav-item" href="/logout">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'log-out', size: 18 }) %></span>
+        <span>Logout</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-user">
+      <img class="avatar avatar-sm" src="<%= user.avatarUrl %>" alt="">
+      <div class="sidebar-user-meta">
+        <strong><%= user.displayName %></strong>
+        <small>@<%= user.username %></small>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <span class="status-dot"></span>
+      <span>Powered by Zyra Nodes Limited</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Control Center</p>
+        <h1>Your Servers</h1>
+        <p class="muted">Pick a server to configure Zyron. Only servers where you are owner or manager are shown.</p>
+      </div>
+      <div class="topbar-actions">
+        <div class="search-wrap">
+          <span class="search-icon"><%- include('partials/icon', { name: 'search', size: 15 }) %></span>
+          <input id="serverSearch" class="input search-input" type="search" placeholder="Search servers..." autocomplete="off">
+        </div>
+        <a class="btn btn-ghost" href="/dashboard">Refresh</a>
+      </div>
+    </header>
+
+    <% if (typeof botApiOnline !== 'undefined' && botApiOnline === false) { %>
+      <div class="alert alert-warning">
+        <span class="alert-icon"><%- include('partials/icon', { name: 'wifi-off', size: 18 }) %></span>
+        <div>
+          <strong>Bot API is offline.</strong>
+          <p class="muted">Server status is coming from the bot's Discord guild list, not the live bridge. Start the bot or check <strong>BOT_API_URL</strong> and <strong>BOT_API_KEY</strong> to load live settings.</p>
+        </div>
+      </div>
+    <% } %>
+
+    <section class="hero card">
+      <div class="hero-profile">
+        <img class="avatar avatar-lg" src="<%= user.avatarUrl %>" alt="">
+        <div>
+          <h2><%= user.displayName %></h2>
+          <p class="muted">@<%= user.username %> <span class="dot" aria-hidden="true"></span> Signed in with Discord</p>
+        </div>
+      </div>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <strong><%= stats.total %></strong>
+          <span>Manageable</span>
+        </div>
+        <div class="hero-stat">
+          <strong><%= stats.withBot %></strong>
+          <span>Protected</span>
+        </div>
+        <div class="hero-stat">
+          <strong><%= stats.withoutBot %></strong>
+          <span>Available</span>
+        </div>
+        <div class="hero-stat">
+          <strong><%= botGuildCount %></strong>
+          <span>Bot Servers</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-head">
+      <div>
+        <h2>Select a server</h2>
+        <p class="muted">Free forever. Every protection is included.</p>
+      </div>
+      <span class="badge badge-soft">No premium tier</span>
+    </div>
+
+    <% if (servers.length === 0) { %>
+      <section class="empty card">
+        <div class="empty-icon"><%- include('partials/icon', { name: 'server', size: 40 }) %></div>
+        <h3>No manageable servers found</h3>
+        <p class="muted">
+          You need the <strong>Manage Server</strong> or <strong>Administrator</strong> permission
+          on a Discord server to configure Zyron there.
+        </p>
+        <a class="btn btn-primary" href="/dashboard">Refresh server list</a>
+      </section>
+    <% } else { %>
+      <div class="server-grid" id="serverGrid">
+        <% servers.forEach(function (server) { %>
+          <article class="server-card" data-name="<%= server.name.toLowerCase() %>">
+            <div class="server-top">
+              <div class="server-icon">
+                <% if (server.icon) { %>
+                  <img src="https://cdn.discordapp.com/icons/<%= server.id %>/<%= server.icon %>.png?size=128" alt="">
+                <% } else { %>
+                  <span><%= server.name.charAt(0).toUpperCase() %></span>
+                <% } %>
+              </div>
+              <div class="server-meta">
+                <h3><%= server.name %></h3>
+                <p class="muted"><%= server.owner ? 'Server Owner' : 'Server Manager' %></p>
+              </div>
+            </div>
+
+            <div class="server-status <%= server.hasBot ? 'online' : 'offline' %>">
+              <span class="dot"></span>
+              <%= server.hasBot ? 'Zyron is protecting this server' : 'Zyron is not in this server yet' %>
+            </div>
+
+            <div class="server-actions">
+              <% if (server.hasBot) { %>
+                <a class="btn btn-primary btn-full" href="/server/<%= server.id %>">Configure</a>
+              <% } else { %>
+                <a class="btn btn-discord btn-full" href="<%= server.inviteUrl %>" target="_blank" rel="noopener">Add Bot to Server</a>
+              <% } %>
+            </div>
+          </article>
+        <% }); %>
+      </div>
+
+      <div class="empty card hidden" id="noResults">
+        <div class="empty-icon"><%- include('partials/icon', { name: 'search', size: 40 }) %></div>
+        <h3>No servers match your search</h3>
+        <p class="muted">Try a different name.</p>
+      </div>
+    <% } %>
+
+    <footer class="page-footer">
+      <span>Zyron <span class="dot" aria-hidden="true"></span> Powered by Zyra Nodes Limited</span>
+      <a href="<%= brand.invite %>" target="_blank" rel="noopener">Support</a>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      var input = document.getElementById('serverSearch');
+      var grid = document.getElementById('serverGrid');
+      var empty = document.getElementById('noResults');
+      if (!input || !grid) return;
+
+      input.addEventListener('input', function () {
+        var query = input.value.toLowerCase().trim();
+        var cards = grid.querySelectorAll('.server-card');
+        var visible = 0;
+
+        for (var i = 0; i < cards.length; i++) {
+          var card = cards[i];
+          var name = card.getAttribute('data-name') || '';
+          var match = !query || name.indexOf(query) !== -1;
+          card.style.display = match ? '' : 'none';
+          if (match) visible++;
+        }
+
+        if (empty) {
+          if (visible === 0) empty.classList.remove('hidden');
+          else empty.classList.add('hidden');
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

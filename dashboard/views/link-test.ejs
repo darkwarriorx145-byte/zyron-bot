@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zyron — Website Link Test</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="app">
+  <aside class="sidebar">
+    <a class="brand" href="/dashboard">
+      <span class="brand-mark"><%- include('partials/icon', { name: 'shield', size: 22 }) %></span>
+      <span class="brand-text">
+        <strong>Zyron</strong>
+        <small>Control Center</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      <a class="nav-item" href="/dashboard">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'home', size: 18 }) %></span>
+        <span>Servers</span>
+      </a>
+      <% if (user.isMainAdmin) { %>
+        <a class="nav-item" href="/admin">
+          <span class="nav-icon"><%- include('partials/icon', { name: 'crown', size: 18 }) %></span>
+          <span>Admin Panel</span>
+        </a>
+      <% } %>
+      <a class="nav-item active" href="/link-test">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'globe', size: 18 }) %></span>
+        <span>Link Test</span>
+      </a>
+      <a class="nav-item" href="<%= brand.invite %>" target="_blank" rel="noopener">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'message-circle', size: 18 }) %></span>
+        <span>Support Server</span>
+      </a>
+      <a class="nav-item" href="/logout">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'log-out', size: 18 }) %></span>
+        <span>Logout</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-user">
+      <img class="avatar avatar-sm" src="<%= user.avatarUrl %>" alt="">
+      <div class="sidebar-user-meta">
+        <strong><%= user.displayName %></strong>
+        <small>@<%= user.username %></small>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <span class="status-dot"></span>
+      <span>Powered by Zyra Nodes Limited</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">System</p>
+        <h1>Website Link Test</h1>
+        <p class="muted">Check that this website can reach the bot on Pterodactyl.</p>
+      </div>
+      <div class="topbar-actions">
+        <span class="badge <%= mode === 'remote' ? 'badge-success' : 'badge-soft' %>">
+          <%= mode === 'remote' ? 'Remote bridge' : 'Local mode' %>
+        </span>
+        <a class="btn btn-ghost" href="/link-test"><%- include('partials/icon', { name: 'refresh', size: 16 }) %> Run Test Again</a>
+        <a class="btn btn-ghost" href="/dashboard"><%- include('partials/icon', { name: 'arrow-left', size: 16 }) %> Back to Servers</a>
+      </div>
+    </header>
+
+    <% if (!result.configured) { %>
+      <div class="alert alert-warning">
+        <span class="alert-icon"><%- include('partials/icon', { name: 'alert-triangle', size: 18 }) %></span>
+        <div>
+          <strong>The remote bridge is not configured.</strong>
+          <p class="muted"><%= result.error %></p>
+          <p class="muted">Local mode is fine while the website and bot run on the same PC. For Pterodactyl + Netlify, set the fields below.</p>
+        </div>
+      </div>
+    <% } else if (!result.ok) { %>
+      <div class="alert alert-error">
+        <span class="alert-icon"><%- include('partials/icon', { name: 'x-circle', size: 18 }) %></span>
+        <div>
+          <strong>Could not reach the bot API.</strong>
+          <p class="muted"><%= result.error %></p>
+          <p class="muted">Check BOT_API_URL, BOT_API_KEY, the Pterodactyl allocation, and whether the bot is online.</p>
+        </div>
+      </div>
+    <% } else { %>
+      <div class="alert alert-warning" style="border-color: rgba(87, 242, 135, 0.35);">
+        <span class="alert-icon"><%- include('partials/icon', { name: 'check-circle', size: 18 }) %></span>
+        <div>
+          <strong>The website reached the bot successfully.</strong>
+          <p class="muted">The bridge is working. Settings saved here will be applied to the running bot.</p>
+        </div>
+      </div>
+    <% } %>
+
+    <section class="stats-grid">
+      <article class="stat-card">
+        <span class="stat-icon"><%- include('partials/icon', { name: 'link', size: 20 }) %></span>
+        <strong><%= result.configured ? 'Yes' : 'No' %></strong>
+        <span>Bridge Configured</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon"><%- include('partials/icon', { name: 'bot', size: 20 }) %></span>
+        <strong><%= result.ok && result.health && result.health.bot ? result.health.bot : '—' %></strong>
+        <span>Bot Account</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon"><%- include('partials/icon', { name: 'server', size: 20 }) %></span>
+        <strong><%= result.ok && result.health ? result.health.guilds : '—' %></strong>
+        <span>Servers</span>
+      </article>
+      <article class="stat-card">
+        <span class="stat-icon"><%- include('partials/icon', { name: 'activity', size: 20 }) %></span>
+        <strong><%= result.ok && result.health ? result.health.requestCount : '—' %></strong>
+        <span>API Requests</span>
+      </article>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-icon"><%- include('partials/icon', { name: 'clipboard', size: 18 }) %></span>
+          <div>
+            <h2>Connection Details</h2>
+            <p class="muted">Exactly what this website is using to reach the bot.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <tbody>
+            <tr>
+              <th>Mode</th>
+              <td><%= mode === 'remote' ? 'Remote bridge (bot on another machine)' : 'Local mode (shared database file)' %></td>
+            </tr>
+            <tr>
+              <th>Bot API URL</th>
+              <td><%= botApiUrl || 'Not set' %></td>
+            </tr>
+            <tr>
+              <th>API Key</th>
+              <td><%= maskedKey || 'Not set' %></td>
+            </tr>
+            <% if (result.ok && result.health) { %>
+              <tr>
+                <th>API Status</th>
+                <td><span class="badge badge-success">Online</span></td>
+              </tr>
+              <tr>
+                <th>Bot ID</th>
+                <td><%= result.health.botId || 'Unknown' %></td>
+              </tr>
+              <tr>
+                <th>API Uptime</th>
+                <td><%= Math.floor((result.health.uptimeMs || 0) / 1000) %> seconds</td>
+              </tr>
+              <tr>
+                <th>Last Dashboard Heartbeat</th>
+                <td>
+                  <% if (result.health.lastHeartbeat) { %>
+                    <%= new Date(result.health.lastHeartbeat.at).toLocaleString() %>
+                    <span class="muted">(<%= result.health.lastHeartbeat.ip || 'unknown IP' %>)</span>
+                  <% } else { %>
+                    No heartbeat recorded yet.
+                  <% } %>
+                </td>
+              </tr>
+            <% } %>
+            <% if (!result.ok && result.error) { %>
+              <tr>
+                <th>Error</th>
+                <td><%= result.error %></td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <div class="card-title">
+          <span class="card-icon"><%- include('partials/icon', { name: 'settings', size: 18 }) %></span>
+          <div>
+            <h2>Setup Fields</h2>
+            <p class="muted">Use the same secret on the bot and the website.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Where</th>
+              <th>Variable</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Bot .env</td>
+              <td>BOT_API_ENABLED</td>
+              <td>true</td>
+            </tr>
+            <tr>
+              <td>Bot .env</td>
+              <td>BOT_API_PORT</td>
+              <td>4000 (allocate this port in Pterodactyl)</td>
+            </tr>
+            <tr>
+              <td>Bot .env</td>
+              <td>BOT_API_KEY</td>
+              <td>A long random secret</td>
+            </tr>
+            <tr>
+              <td>Bot .env</td>
+              <td>BOT_API_PUBLIC_URL</td>
+              <td>The public HTTPS URL of the bot API</td>
+            </tr>
+            <tr>
+              <td>Bot .env</td>
+              <td>DASHBOARD_URL</td>
+              <td>Your Netlify URL</td>
+            </tr>
+            <tr>
+              <td>Website .env</td>
+              <td>BOT_API_URL</td>
+              <td>The same public HTTPS URL of the bot API</td>
+            </tr>
+            <tr>
+              <td>Website .env</td>
+              <td>BOT_API_KEY</td>
+              <td>The same secret as the bot</td>
+            </tr>
+            <tr>
+              <td>Website .env</td>
+              <td>DASHBOARD_PUBLIC_URL</td>
+              <td>Your Netlify URL</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

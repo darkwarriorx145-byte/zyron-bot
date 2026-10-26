@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zyron — <%= serverName %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="app">
+  <aside class="sidebar">
+    <a class="brand" href="/dashboard">
+      <span class="brand-mark"><%- include('partials/icon', { name: 'shield', size: 22 }) %></span>
+      <span class="brand-text">
+        <strong>Zyron</strong>
+        <small>Control Center</small>
+      </span>
+    </a>
+
+    <nav class="nav">
+      <a class="nav-item" href="/dashboard">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'arrow-left', size: 18 }) %></span>
+        <span>All Servers</span>
+      </a>
+      <a class="nav-item active" href="/server/<%= serverId %>">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'settings', size: 18 }) %></span>
+        <span>Server Settings</span>
+      </a>
+      <% if (user.isMainAdmin) { %>
+        <a class="nav-item" href="/admin">
+          <span class="nav-icon"><%- include('partials/icon', { name: 'crown', size: 18 }) %></span>
+          <span>Admin Panel</span>
+        </a>
+      <% } %>
+      <a class="nav-item" href="/link-test">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'globe', size: 18 }) %></span>
+        <span>Link Test</span>
+      </a>
+      <a class="nav-item" href="<%= brand.invite %>" target="_blank" rel="noopener">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'message-circle', size: 18 }) %></span>
+        <span>Support Server</span>
+      </a>
+      <a class="nav-item" href="/logout">
+        <span class="nav-icon"><%- include('partials/icon', { name: 'log-out', size: 18 }) %></span>
+        <span>Logout</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-spacer"></div>
+
+    <div class="sidebar-user">
+      <img class="avatar avatar-sm" src="<%= user.avatarUrl %>" alt="">
+      <div class="sidebar-user-meta">
+        <strong><%= user.displayName %></strong>
+        <small>@<%= user.username %></small>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <span class="status-dot"></span>
+      <span>Powered by Zyra Nodes Limited</span>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div class="topbar-server">
+        <div class="server-icon server-icon-lg">
+          <% if (serverIcon) { %>
+            <img src="<%= serverIcon %>" alt="">
+          <% } else { %>
+            <span><%= serverName.charAt(0).toUpperCase() %></span>
+          <% } %>
+        </div>
+        <div>
+          <p class="eyebrow">Server Settings</p>
+          <h1><%= serverName %></h1>
+          <p class="muted"><span class="status-dot"></span> Zyron is online in this server</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" id="saveTop" type="button">Save Changes</button>
+      </div>
+    </header>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <% if (typeof botApiOnline !== 'undefined' && botApiOnline === false) { %>
+      <div class="alert alert-warning">
+        <span class="alert-icon"><%- include('partials/icon', { name: 'wifi-off', size: 18 }) %></span>
+        <div>
+          <strong>Bot API is offline.</strong>
+          <p class="muted">You are viewing the last settings saved in the local bot database. Start the bot or check <strong>BOT_API_URL</strong> and <strong>BOT_API_KEY</strong> before saving changes.</p>
+        </div>
+      </div>
+    <% } %>
+
+    <form id="settingsForm" autocomplete="off">
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="card-icon"><%- include('partials/icon', { name: 'brain', size: 18 }) %></span>
+            <div>
+              <h2>AI Security Engine</h2>
+              <p class="muted">OpenRouter confirms nukes, raids and abusive messages before Zyron acts.</p>
+            </div>
+          </div>
+          <span class="badge <%= aiReady ? 'badge-success' : 'badge-warning' %>"><%= aiReady ? 'Key set' : 'Key missing' %></span>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <strong>Enable AI second opinion</strong>
+            <small>When off, only the deterministic Zyron rules decide.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="aiEnabled" <%= settings.aiEnabled !== false ? 'checked' : '' %>>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <strong>Scan risky messages</strong>
+            <small>Send threat, doxxing, scam and NSFW signals to the AI even when keywords miss.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="aiScanMessages" <%= settings.aiScanMessages !== false ? 'checked' : '' %>>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Model</span>
+            <input class="input" id="aiModel" type="text" value="<%= settings.aiModel || '' %>" placeholder="<%= defaultModel %>" maxlength="100">
+            <small class="field-hint">Leave blank to use the bot default. Example: openrouter/auto</small>
+          </label>
+
+          <label class="field">
+            <span>When AI confirms a threat</span>
+            <select class="input" id="aiAction">
+              <option value="auto" <%= settings.aiAction === 'auto' ? 'selected' : '' %>>Use Zyron rules (auto)</option>
+              <option value="ban" <%= settings.aiAction === 'ban' ? 'selected' : '' %>>Ban the offender</option>
+              <option value="kick" <%= settings.aiAction === 'kick' ? 'selected' : '' %>>Kick the offender</option>
+              <option value="timeout" <%= settings.aiAction === 'timeout' ? 'selected' : '' %>>Timeout for 60 minutes</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="field">
+          <div class="range-head">
+            <span>AI confidence threshold</span>
+            <strong id="aiConfidenceValue"><%= Math.round((settings.aiConfidence || 0.6) * 100) %>%</strong>
+          </div>
+          <input class="range" id="aiConfidence" type="range" min="0.3" max="0.95" step="0.05" value="<%= settings.aiConfidence || 0.6 %>">
+          <small class="field-hint">The AI must be at least this confident before it clears or overrides a punishment.</small>
+        </div>
+
+        <div class="ai-test">
+          <div class="ai-test-head">
+            <strong>Test the AI</strong>
+            <small>Nothing is punished. This only shows the verdict.</small>
+          </div>
+          <div class="ai-test-row">
+            <input class="input" id="aiTestText" type="text" placeholder="Paste a message to classify..." maxlength="1200">
+            <button class="btn btn-ghost" id="aiTestBtn" type="button">Run Test</button>
+          </div>
+          <small class="field-hint">openrouter/auto needs credits. Free fallback models are used automatically. A rate-limit error means the daily free quota is used up.</small>
+          <div class="ai-result hidden" id="aiTestResult"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="card-icon"><%- include('partials/icon', { name: 'shield', size: 18 }) %></span>
+            <div>
+              <h2>Core Protection</h2>
+              <p class="muted">Master switches and the default punishment for destructive actions.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-copy">
+            <strong>Anti-Nuke protection</strong>
+            <small>Blocks and reverts unauthorized destructive actions.</small>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="antiNukeEnabled" <%= settings.antiNukeEnabled !== false ? 'checked' : '' %>>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Bot prefix</span>
+            <input class="input" id="prefix" type="text" value="<%= settings.prefix %>" maxlength="5">
+            <small class="field-hint">The character used before commands, for example .</small>
+          </label>
+
+          <label class="field">
+            <span>Punishment for nukers</span>
+            <select class="input" id="punishment">
+              <option value="ban" <%= settings.punishment === 'ban' ? 'selected' : '' %>>Ban</option>
+              <option value="kick" <%= settings.punishment === 'kick' ? 'selected' : '' %>>Kick</option>
+              <option value="mute" <%= settings.punishment === 'mute' ? 'selected' : '' %>>Timeout (28 days)</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Punishment for raiders</span>
+            <select class="input" id="raidPunishment">
+              <option value="kick" <%= settings.raidPunishment === 'kick' ? 'selected' : '' %>>Kick</option>
+              <option value="ban" <%= settings.raidPunishment === 'ban' ? 'selected' : '' %>>Ban</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Private log channel ID</span>
+            <input class="input" id="logChannel" type="text" value="<%= settings.logChannel || '' %>" placeholder="Leave blank to auto-create zyron-logs" maxlength="25">
+            <small class="field-hint">Zyron creates a private zyron-logs channel automatically.</small>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="card-icon"><%- include('partials/icon', { name: 'palette', size: 18 }) %></span>
+            <div>
+              <h2>Auto Roles</h2>
+              <p class="muted">Roles assigned automatically when members, bots or boosters join.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Member auto role ID</span>
+            <input class="input" id="autoRoleId" type="text" value="<%= settings.autoRoleId || '' %>" placeholder="Role ID" maxlength="25">
+          </label>
+
+          <label class="field">
+            <span>Bot auto role ID</span>
+            <input class="input" id="autoRoleBotId" type="text" value="<%= settings.autoRoleBotId || '' %>" placeholder="Role ID" maxlength="25">
+          </label>
+
+          <label class="field">
+            <span>Booster auto role ID</span>
+            <input class="input" id="boosterRoleId" type="text" value="<%= settings.boosterRoleId || '' %>" placeholder="Role ID" maxlength="25">
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="card-icon"><%- include('partials/icon', { name: 'coins', size: 18 }) %></span>
+            <div>
+              <h2>Economy</h2>
+              <p class="muted">Server-specific coin rewards. Every server has its own economy.</p>
+            </div>
+          </div>
+          <span class="badge badge-success">No premium</span>
+        </div>
+
+        <div class="form-grid">
+          <label class="field">
+            <span>Daily reward (coins)</span>
+            <input class="input" id="economyDaily" type="number" min="1" max="100000" value="<%= settings.economyDaily %>">
+            <small class="field-hint">Coins a member receives with .economy daily. Default 100.</small>
+          </label>
+
+          <label class="field">
+            <span>Invite reward (coins)</span>
+            <input class="input" id="economyInvite" type="number" min="0" max="100000" value="<%= settings.economyInvite %>">
+            <small class="field-hint">Coins the inviter receives for a real join. Set 0 to disable. Default 25.</small>
+          </label>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="card-icon"><%- include('partials/icon', { name: 'settings', size: 18 }) %></span>
+            <div>
+              <h2>Protections</h2>
+              <p class="muted">Every guard is independent. Turn off only what you do not need.</p>
+            </div>
+          </div>
+          <span class="badge badge-soft">24 guards</span>
+        </div>
+
+        <% featureGroups.forEach(function (group) { %>
+          <div class="feature-group">
+            <div class="feature-group-head">
+              <h3><%= group.label %></h3>
+              <p class="muted"><%= group.description %></p>
+            </div>
+            <div class="feature-grid">
+              <% featureCatalog.filter(function (feature) { return feature.group === group.key; }).forEach(function (feature) { %>
+                <label class="feature-item">
+                  <span class="feature-copy">
+                    <strong><%= feature.label %></strong>
+                    <small><%= feature.description %></small>
+                  </span>
+                  <span class="switch">
+                    <input type="checkbox" class="feature-toggle" data-feature="<%= feature.key %>" <%= settings.features[feature.key] ? 'checked' : '' %>>
+                    <span class="slider"></span>
+                  </span>
+                </label>
+              <% }); %>
+            </div>
+          </div>
+        <% }); %>
+      </section>
+
+      <div class="form-actions">
+        <button class="btn btn-primary btn-lg" id="saveBottom" type="button">Save Changes</button>
+        <a class="btn btn-ghost btn-lg" href="/dashboard">Cancel</a>
+      </div>
+    </form>
+
+    <footer class="page-footer">
+      <span>Zyron <span class="dot" aria-hidden="true"></span> Powered by Zyra Nodes Limited</span>
+      <a href="<%= brand.invite %>" target="_blank" rel="noopener">Support</a>
+    </footer>
+  </main>
+
+  <script>
+    (function () {
+      var serverId = <%- JSON.stringify(serverId) %>;
+
+      function byId(id) {
+        return document.getElementById(id);
+      }
+
+      function valueOf(id) {
+        var element = byId(id);
+        return element ? element.value : '';
+      }
+
+      function isChecked(id) {
+        var element = byId(id);
+        return element ? element.checked : false;
+      }
+
+      function escapeHtml(text) {
+        return String(text).replace(/[&<>"']/g, function (character) {
+          if (character === '&') return '&amp;';
+          if (character === '<') return '&lt;';
+          if (character === '>') return '&gt;';
+          if (character === '"') return '&quot;';
+          return '&#39;';
+        });
+      }
+
+      function showToast(message, type) {
+        var toast = byId('toast');
+        if (!toast) return;
+        toast.textContent = message;
+        toast.className = 'toast show ' + (type || 'ok');
+        window.setTimeout(function () {
+          toast.className = 'toast';
+        }, 3500);
+      }
+
+      var range = byId('aiConfidence');
+      var rangeValue = byId('aiConfidenceValue');
+      if (range && rangeValue) {
+        range.addEventListener('input', function () {
+          rangeValue.textContent = Math.round(parseFloat(range.value) * 100) + '%';
+        });
+      }
+
+      function collectPayload() {
+        var features = {};
+        var toggles = document.querySelectorAll('.feature-toggle');
+        Array.prototype.forEach.call(toggles, function (toggle) {
+          features[toggle.getAttribute('data-feature')] = toggle.checked;
+        });
+
+        return {
+          prefix: valueOf('prefix'),
+          punishment: valueOf('punishment'),
+          raidPunishment: valueOf('raidPunishment'),
+          logChannel: valueOf('logChannel'),
+          autoRoleId: valueOf('autoRoleId'),
+          autoRoleBotId: valueOf('autoRoleBotId'),
+          boosterRoleId: valueOf('boosterRoleId'),
+          antiNukeEnabled: isChecked('antiNukeEnabled'),
+          aiEnabled: isChecked('aiEnabled'),
+          aiScanMessages: isChecked('aiScanMessages'),
+          aiModel: valueOf('aiModel'),
+          aiAction: valueOf('aiAction'),
+          aiConfidence: parseFloat(valueOf('aiConfidence')),
+          economyDaily: parseInt(valueOf('economyDaily'), 10) || 100,
+          economyInvite: parseInt(valueOf('economyInvite'), 10) || 0,
+          features: features
+        };
+      }
+
+      function saveSettings(button) {
+        var original = button ? button.textContent : 'Save Changes';
+        if (button) {
+          button.disabled = true;
+          button.textContent = 'Saving...';
+        }
+
+        fetch('/api/server/' + serverId + '/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(collectPayload())
+        }).then(function (response) {
+          return response.json();
+        }).then(function (data) {
+          if (data && data.ok) {
+            showToast('Settings saved for this server.', 'ok');
+          } else {
+            showToast((data && data.error) || 'Could not save settings.', 'error');
+          }
+        }).catch(function (err) {
+          showToast('Network error: ' + err.message, 'error');
+        }).then(function () {
+          if (button) {
+            button.disabled = false;
+            button.textContent = original;
+          }
+        });
+      }
+
+      var saveTop = byId('saveTop');
+      var saveBottom = byId('saveBottom');
+      if (saveTop) saveTop.addEventListener('click', function () { saveSettings(saveTop); });
+      if (saveBottom) saveBottom.addEventListener('click', function () { saveSettings(saveBottom); });
+
+      var testButton = byId('aiTestBtn');
+      if (testButton) {
+        testButton.addEventListener('click', function () {
+          var text = valueOf('aiTestText');
+          var box = byId('aiTestResult');
+          if (!text) {
+            showToast('Enter a message to test first.', 'error');
+            return;
+          }
+
+          testButton.disabled = true;
+          testButton.textContent = 'Testing...';
+          if (box) {
+            box.className = 'ai-result';
+            box.textContent = 'Asking the AI...';
+          }
+
+          fetch('/api/ai/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ serverId: serverId, text: text })
+          }).then(function (response) {
+            return response.json();
+          }).then(function (data) {
+            if (!box) return;
+            if (!data || !data.ok) {
+              box.className = 'ai-result error';
+              box.textContent = (data && data.error) || 'The AI test failed.';
+              return;
+            }
+
+            var verdict = String(data.verdict || 'uncertain').toUpperCase();
+            var confidence = Math.round((data.confidence || 0) * 100);
+            box.className = 'ai-result ' + (data.verdict === 'legit' ? 'ok' : 'warn');
+            box.innerHTML =
+              '<div class="ai-result-top"><strong>' + escapeHtml(verdict) + '</strong>' +
+              '<span>' + confidence + '%</span></div>' +
+              '<p>' + escapeHtml(data.reason || 'No reason returned.') + '</p>' +
+              '<small>' + escapeHtml(data.model || 'unknown model') + ' | ' +
+              escapeHtml(data.category || 'none') + ' | action: ' +
+              escapeHtml(data.action || 'none') + '</small>';
+          }).catch(function (err) {
+            if (box) {
+              box.className = 'ai-result error';
+              box.textContent = 'Network error: ' + err.message;
+            }
+          }).then(function () {
+            testButton.disabled = false;
+            testButton.textContent = 'Run Test';
+          });
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

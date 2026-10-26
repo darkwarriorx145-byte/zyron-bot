@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zyron — Sign in with Discord</title>
+  <meta name="description" content="Zyron is a free Discord moderation, anti-nuke and anti-raid bot. Powered by Zyra Nodes Limited.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-page">
+  <div class="login-bg" aria-hidden="true">
+    <span class="login-orb orb-one"></span>
+    <span class="login-orb orb-two"></span>
+    <span class="login-grid"></span>
+  </div>
+
+  <main class="login-card">
+    <div class="login-brand">
+      <div class="login-logo"><%- include('partials/icon', { name: 'shield', size: 34 }) %></div>
+      <div>
+        <h1>Zyron</h1>
+        <p class="login-tagline">Your server, protected.</p>
+      </div>
+    </div>
+
+    <p class="login-copy">
+      The all-in-one Discord security and community bot. Anti-nuke, anti-raid,
+      AI threat detection, AutoMod, economy and more — free for every server.
+    </p>
+
+    <% if (typeof error !== 'undefined' && error) { %>
+      <div class="alert alert-error">
+        <span class="alert-icon"><%- include('partials/icon', { name: 'alert-triangle', size: 18 }) %></span>
+        <span><%= error %></span>
+      </div>
+    <% } %>
+
+    <% if (!oauthReady) { %>
+      <div class="alert alert-warning">
+        <span class="alert-icon"><%- include('partials/icon', { name: 'tool', size: 18 }) %></span>
+        <span>Discord OAuth is not configured. Add <strong>DISCORD_CLIENT_ID</strong> and <strong>DISCORD_CLIENT_SECRET</strong> to <strong>dashboard/.env</strong>.</span>
+      </div>
+    <% } %>
+
+    <a class="btn btn-discord btn-lg btn-full" href="/auth/discord">
+      <svg class="discord-logo" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="currentColor" d="M20.32 4.37a19.8 19.8 0 0 0-4.93-1.52 13.8 13.8 0 0 0-.64 1.3 18.3 18.3 0 0 0-5.5 0 12.8 12.8 0 0 0-.65-1.3 19.7 19.7 0 0 0-4.93 1.52C.53 9.05-.32 13.6.1 18.09a19.9 19.9 0 0 0 6.07 3.08c.49-.67.93-1.38 1.3-2.12-.71-.27-1.4-.6-2.04-.99.17-.12.34-.25.5-.38a14.2 14.2 0 0 0 12.14 0c.16.13.33.26.5.38-.65.39-1.34.72-2.05.99.37.74.81 1.45 1.3 2.12a19.8 19.8 0 0 0 6.07-3.08c.5-5.2-.84-9.71-3.57-13.72ZM8.02 15.33c-1.18 0-2.15-1.09-2.15-2.42 0-1.34.95-2.43 2.15-2.43 1.2 0 2.17 1.1 2.15 2.43 0 1.33-.95 2.42-2.15 2.42Zm7.96 0c-1.18 0-2.15-1.09-2.15-2.42 0-1.34.95-2.43 2.15-2.43 1.2 0 2.17 1.1 2.15 2.43 0 1.33-.95 2.42-2.15 2.42Z"/>
+      </svg>
+      Continue with Discord
+    </a>
+
+    <p class="login-hint">
+      We only request your Discord username, avatar and server list.
+      Zyron never sees your password.
+    </p>
+
+    <div class="login-features">
+      <span><%- include('partials/icon', { name: 'shield', size: 15 }) %> Anti-Nuke</span>
+      <span><%- include('partials/icon', { name: 'brain', size: 15 }) %> AI Guard</span>
+      <span><%- include('partials/icon', { name: 'zap', size: 15 }) %> Anti-Raid</span>
+      <span><%- include('partials/icon', { name: 'coins', size: 15 }) %> Economy</span>
+    </div>
+
+    <div class="login-footer">
+      <span>Free forever</span>
+      <span class="dot" aria-hidden="true"></span>
+      <span>All features included</span>
+    </div>
+  </main>
+
+  <p class="login-company">Powered by Zyra Nodes Limited</p>
+</body>
+</html>
