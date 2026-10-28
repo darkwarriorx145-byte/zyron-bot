@@ -332,6 +332,16 @@ async function createTicket(client, interaction, custom, reason) {
     components: [ticketButtons()]
   }).catch(function () {});
 
+  await channel.send({
+    embeds: [
+      new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
+        .setDescription(String(requestReason).slice(0, 4096))
+        .setFooter({ text: 'Ticket request' })
+    ]
+  }).catch(function () {});
+
   await interaction.editReply({ content: 'Your ticket is ready: ' + channel + ' (**' + id + '** - ' + type + ')' });
 
   if (settings.ticketAiEnabled !== false && settings.aiEnabled !== false) {
