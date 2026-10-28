@@ -719,14 +719,7 @@ async function handleTicketMessage(message, settings) {
   });
 
   if (reply) {
-    await message.channel.send({
-      embeds: [
-        ZyronEmbedBuilder.base({
-          title: config.botName + ' AI Support',
-          description: String(reply).slice(0, 4096)
-        })
-      ]
-    }).catch(function () {});
+    await message.channel.send(String(reply).slice(0, 2000)).catch(function () {});
     db.updateTicket(message.guild.id, record.id, {
       aiReplies: (record.aiReplies || 0) + 1,
       lastAiAt: Date.now()

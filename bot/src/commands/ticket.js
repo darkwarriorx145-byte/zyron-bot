@@ -352,15 +352,7 @@ async function createTicket(client, interaction, custom, reason) {
       user: interaction.user,
       reason: requestReason
     }).then(function (text) {
-      return channel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setColor(config.colors.primary)
-            .setAuthor({ name: config.botName + ' AI Support', iconURL: client.user.displayAvatarURL() })
-            .setDescription(String(text).slice(0, 4096))
-            .setFooter({ text: 'AI assistant | Staff can take over at any time' })
-        ]
-      });
+      return channel.send(String(text).slice(0, 2000));
     }).catch(function (err) {
       console.error('Ticket AI reply error:', err.message);
     });
