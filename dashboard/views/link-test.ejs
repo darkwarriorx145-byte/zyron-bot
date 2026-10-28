@@ -8,57 +8,13 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/glass-core.css">
+  <link rel="stylesheet" href="/css/glass-server.css">
+  <link rel="stylesheet" href="/css/glass-responsive.css">
 </head>
-<body class="app">
-  <aside class="sidebar">
-    <a class="brand" href="/dashboard">
-      <span class="brand-mark"><%- include('partials/icon', { name: 'shield', size: 22 }) %></span>
-      <span class="brand-text">
-        <strong>Zyron</strong>
-        <small>Control Center</small>
-      </span>
-    </a>
-
-    <nav class="nav">
-      <a class="nav-item" href="/dashboard">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'home', size: 18 }) %></span>
-        <span>Servers</span>
-      </a>
-      <% if (user.isMainAdmin) { %>
-        <a class="nav-item" href="/admin">
-          <span class="nav-icon"><%- include('partials/icon', { name: 'crown', size: 18 }) %></span>
-          <span>Admin Panel</span>
-        </a>
-      <% } %>
-      <a class="nav-item active" href="/link-test">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'globe', size: 18 }) %></span>
-        <span>Link Test</span>
-      </a>
-      <a class="nav-item" href="<%= brand.invite %>" target="_blank" rel="noopener">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'message-circle', size: 18 }) %></span>
-        <span>Support Server</span>
-      </a>
-      <a class="nav-item" href="/logout">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'log-out', size: 18 }) %></span>
-        <span>Logout</span>
-      </a>
-    </nav>
-
-    <div class="sidebar-spacer"></div>
-
-    <div class="sidebar-user">
-      <img class="avatar avatar-sm" src="<%= user.avatarUrl %>" alt="">
-      <div class="sidebar-user-meta">
-        <strong><%= user.displayName %></strong>
-        <small>@<%= user.username %></small>
-      </div>
-    </div>
-
-    <div class="sidebar-footer">
-      <span class="status-dot"></span>
-      <span>Powered by Zyra Nodes Limited</span>
-    </div>
-  </aside>
+<body class="app link-page">
+  <%- include('partials/notch', { notchLabel: 'Zyron Connection Test', notchMeta: 'Diagnostics' }) %>
+  <%- include('partials/global-sidebar', { activePage: 'link' }) %>
 
   <main class="main">
     <header class="topbar">

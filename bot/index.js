@@ -7,7 +7,10 @@ const {
   Collection,
   PermissionsBitField,
   ChannelType,
-  AuditLogEvent
+  AuditLogEvent,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
 } = require('discord.js');
 const fs = require('fs');
 const config = require('./config.json');
@@ -17,6 +20,12 @@ const channelBackup = require('./src/utils/channelBackup');
 const security = require('./src/utils/security');
 const aiGuard = require('./src/utils/aiGuard');
 const webBridge = require('./src/api/webBridge');
+const theme = require('./src/utils/theme');
+const protection = require('./src/utils/protection');
+const appealUtil = require('./src/utils/appeal');
+const ticketAssistant = require('./src/utils/ticketAssistant');
+
+theme.install();
 
 const client = new Client({
   intents: [
@@ -42,7 +51,6 @@ client.giveaways = new Collection();
 client.inviteCache = new Collection();
 
 const PREFIX = process.env.PREFIX || config.prefix;
-const DEFAULT_OWNER_ID = process.env.DEFAULT_OWNER_ID || '';
 const counters = new Collection();
 const minorCooldowns = new Collection();
 const spamTracker = new Collection();
@@ -77,9 +85,8 @@ if (fs.existsSync(commandsPath)) {
   });
 }
 
-function isMainOwner(userId) {
-  return Boolean(DEFAULT_OWNER_ID) && userId === DEFAULT_OWNER_ID;
-}
+const isMainOwner = protection.isMainOwner;
+const isProtectedUser = protection.isProtectedUser;
 
 function isBotOwner(userId) {
   return isMainOwner(userId) || db.isCoOwner(userId);
@@ -88,8 +95,8 @@ function isBotOwner(userId) {
 function isTrusted(guild, settings, userId, feature) {
   if (!userId) return true;
   if (userId === client.user.id) return true;
+  if (isProtectedUser(userId)) return true;
   if (settings.betrayed && settings.betrayed.indexOf(userId) !== -1) return false;
-  if (isMainOwner(userId)) return true;
   if (db.isCoOwner(userId)) return true;
   if (userId === guild.ownerId) return true;
   if (settings.extraOwners && settings.extraOwners.indexOf(userId) !== -1) return true;
@@ -228,6 +235,8 @@ async function logAiClearance(guild, settings, action, ai, reason) {
 }
 
 async function betray(guild, settings, userId, action, reason) {
+  if (isProtectedUser(userId)) return null;
+
   const member = await guild.members.fetch(userId).catch(function () {
     return null;
   });
@@ -332,6 +341,8 @@ async function betray(guild, settings, userId, action, reason) {
 }
 
 async function punish(guild, settings, userId, action, reason, severity, options) {
+  if (isProtectedUser(userId)) return null;
+
   const member = await guild.members.fetch(userId).catch(function () {
     return null;
   });
@@ -347,16 +358,34 @@ async function punish(guild, settings, userId, action, reason, severity, options
   }
 
   const level = severity || 'severe';
+  const threshold = Math.max(1, parseInt(settings.warningKickThreshold, 10) || 5);
+  let strikeCount = 0;
+
+  if (level === 'minor') {
+    const previous = db.getWarnings(guild.id, userId).filter(function (warning) {
+      return warning.type !== 'antinuke' && warning.type !== 'betrayal';
+    });
+    strikeCount = previous.length + 1;
+  }
 
   let actionTaken = 'No action possible';
 
   try {
     if (level === 'minor') {
-      if (member && member.moderatable) {
+      if (strikeCount >= threshold) {
+        if (member && member.kickable) {
+          await member.kick(fullReason);
+          actionTaken = 'Kicked after ' + strikeCount + ' warnings (limit ' + threshold + ')';
+        } else if (member) {
+          actionTaken = 'Warning ' + strikeCount + '/' + threshold + ' (kick blocked by role hierarchy)';
+        } else {
+          actionTaken = 'Warning ' + strikeCount + '/' + threshold + ' (member already left)';
+        }
+      } else if (member && member.moderatable) {
         await member.timeout(10 * 60 * 1000, fullReason);
-        actionTaken = 'Muted for 10 minutes + warned';
+        actionTaken = 'Muted for 10 minutes + warning ' + strikeCount + '/' + threshold;
       } else {
-        actionTaken = 'Warning recorded (mute not possible)';
+        actionTaken = 'Warning ' + strikeCount + '/' + threshold + ' recorded (mute not possible)';
       }
     } else {
       const requested = opts.action ? String(opts.action) : '';
@@ -409,7 +438,46 @@ async function punish(guild, settings, userId, action, reason, severity, options
   }
 
   if (typeof db.addWarning === 'function') {
-    db.addWarning(guild.id, userId, { reason: fullReason, moderator: client.user.id });
+    db.addWarning(guild.id, userId, {
+      reason: fullReason,
+      moderator: client.user.id,
+      type: level === 'minor' ? 'minor' : 'antinuke',
+      source: action
+    });
+  }
+
+  if (level === 'minor') {
+    if (actionTaken.indexOf('Kicked after') === 0) {
+      await appealUtil.createAppealCase(guild, settings, userId, {
+        action: 'kick',
+        actionTaken: 'Kicked from the server',
+        reason: reason,
+        warnings: strikeCount,
+        type: 'minor',
+        channelId: null
+      }).catch(function (err) {
+        console.error('Appeal case error:', err.message);
+      });
+    } else {
+      const warningUser = await guild.client.users.fetch(userId).catch(function () {
+        return null;
+      });
+      if (warningUser) {
+        warningUser.send({
+          embeds: [
+            ZyronEmbedBuilder.base({
+              title: 'Warning ' + strikeCount + '/' + threshold,
+              description:
+                'You received a warning in **' + guild.name + '**.\n' +
+                '**Reason:** ' + reason + '\n\n' +
+                (strikeCount + 1 >= threshold
+                  ? 'One more warning will result in a kick.'
+                  : 'Keep following the server rules to avoid a kick.')
+            })
+          ]
+        }).catch(function () {});
+      }
+    }
   }
 
   const embed = ZyronEmbedBuilder.antinukeAlert({
@@ -460,13 +528,20 @@ async function guard(guild, settings, options) {
   const entry = await fetchEntry(guild, options.auditType, options.targetId);
   if (!entry || !entry.executor) return false;
   if (entry.executor.id === client.user.id) return false;
+  if (isProtectedUser(entry.executor.id)) return false;
   if (options.feature && db.isFeatureWhitelisted(guild.id, options.feature, entry.executor.id)) return false;
 
   if (isTrusted(guild, settings, entry.executor.id, options.feature)) {
     if (db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) return false;
     if (!settings.features.antiBetrayal || !options.massKey) return false;
 
-    const rogue = hit(guild.id, entry.executor.id, 'betray:' + options.massKey, 15000, 3);
+    const rogue = hit(
+      guild.id,
+      entry.executor.id,
+      'betray:' + options.massKey,
+      15000,
+      options.betrayalLimit || 3
+    );
     if (!rogue) return false;
 
     if (options.revert) {
@@ -576,6 +651,89 @@ async function handleMinorViolation(guild, settings, authorId, violation, ai) {
   return true;
 }
 
+const ticketAiCooldowns = new Map();
+
+async function handleTicketMessage(message, settings) {
+  if (!message.channel || !message.channel.isTextBased()) return;
+  const record = db.getTicketByChannel(message.guild.id, message.channel.id);
+  if (!record || record.status !== 'open') return;
+
+  const staff = ticketAssistant.isTicketStaff(message.member, settings);
+
+  if (staff) {
+    if (record.aiPaused) return;
+    db.updateTicket(message.guild.id, record.id, {
+      aiPaused: true,
+      handledBy: message.author.id,
+      handledAt: Date.now()
+    });
+
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('ticket:ai:resume')
+        .setLabel('Continue with AI')
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await message.channel.send({
+      embeds: [ticketAssistant.handledEmbed(message.author)],
+      components: [row]
+    }).catch(function () {});
+    return;
+  }
+
+  if (message.author.id !== record.userId) return;
+  if (record.aiPaused) return;
+  if (settings.ticketAiEnabled === false || settings.aiEnabled === false) return;
+  if (!message.content || message.content.trim().length === 0) return;
+
+  const cooldownKey = message.guild.id + ':' + message.channel.id;
+  if (ticketAiCooldowns.has(cooldownKey)) return;
+  ticketAiCooldowns.set(cooldownKey, true);
+  setTimeout(function () {
+    ticketAiCooldowns.delete(cooldownKey);
+  }, 5000);
+
+  const fetched = await message.channel.messages.fetch({ limit: 8 }).catch(function () {
+    return null;
+  });
+  const history = [];
+  if (fetched) {
+    fetched.forEach(function (entry) {
+      if (entry.id === message.id) return;
+      history.push({
+        author: entry.author.bot ? config.botName + ' AI' : entry.author.username,
+        content: String(entry.content || '').slice(0, 500)
+      });
+    });
+    history.reverse();
+  }
+
+  const reply = await ticketAssistant.replyToMessage({
+    settings: settings,
+    type: record.type,
+    reason: record.reason,
+    user: message.author,
+    message: message.content,
+    history: history
+  });
+
+  if (reply) {
+    await message.channel.send({
+      embeds: [
+        ZyronEmbedBuilder.base({
+          title: config.botName + ' AI Support',
+          description: String(reply).slice(0, 4096)
+        })
+      ]
+    }).catch(function () {});
+    db.updateTicket(message.guild.id, record.id, {
+      aiReplies: (record.aiReplies || 0) + 1,
+      lastAiAt: Date.now()
+    });
+  }
+}
+
 let readyHandled = false;
 
 function onReady() {
@@ -659,6 +817,7 @@ client.on('messageCreate', async function (message) {
   const settings = db.getGuild(message.guild.id);
   const prefix = settings.prefix || PREFIX;
   const isCommandMessage = message.content.startsWith(prefix);
+  const protectedAuthor = isProtectedUser(message.author.id);
 
   const messageGuards = settings.features.antiAbuse ||
     settings.features.antiSpam ||
@@ -666,7 +825,9 @@ client.on('messageCreate', async function (message) {
     settings.features.antiEveryone ||
     settings.aiScanMessages !== false;
 
-  if (!isCommandMessage && messageGuards) {
+  const activeTicket = db.getTicketByChannel(message.guild.id, message.channel.id);
+
+  if (!isCommandMessage && messageGuards && !protectedAuthor && !activeTicket) {
     const key = message.guild.id + ':' + message.author.id;
     const onCooldown = minorCooldowns.has(key);
 
@@ -790,6 +951,12 @@ client.on('messageCreate', async function (message) {
     }
   }
 
+  if (!isCommandMessage) {
+    await handleTicketMessage(message, settings).catch(function (err) {
+      console.error('Ticket assistant error:', err.message);
+    });
+  }
+
   if (!message.content.startsWith(prefix)) return;
 
   const raw = message.content.slice(prefix.length).trim();
@@ -845,6 +1012,7 @@ client.on('autoModerationActionExecution', async function (execution) {
 
   const userId = execution.userId;
   if (!userId) return;
+  if (isProtectedUser(userId)) return;
 
   const member = await guild.members.fetch(userId).catch(function () {
     return null;
@@ -896,6 +1064,7 @@ client.on('guildBanAdd', function (ban) {
     action: 'Anti Ban',
     reason: 'Unauthorized ban of ' + ban.user.tag,
     massKey: 'ban',
+    betrayalLimit: 1,
     revert: function () {
       return guild.bans.remove(ban.user.id, 'Zyron Anti-Nuke: reverting unauthorized ban.');
     }
@@ -909,10 +1078,10 @@ client.on('guildMemberRemove', async function (member) {
 
   if (settings.features.antiKick) {
     const kick = await fetchEntry(guild, AuditLogEvent.MemberKick, member.id);
-    if (kick && kick.executor && !db.isFeatureWhitelisted(guild.id, 'antiKick', kick.executor.id)) {
+    if (kick && kick.executor && !isProtectedUser(kick.executor.id) && !db.isFeatureWhitelisted(guild.id, 'antiKick', kick.executor.id)) {
       if (isTrusted(guild, settings, kick.executor.id, 'antiKick')) {
         if (settings.features.antiBetrayal && !db.isFeatureWhitelisted(guild.id, 'antiBetrayal', kick.executor.id)) {
-          const rogue = hit(guild.id, kick.executor.id, 'betray:kick', 15000, 3);
+          const rogue = hit(guild.id, kick.executor.id, 'betray:kick', 15000, 1);
           if (rogue) {
             await betray(guild, settings, kick.executor.id, 'Anti Betrayal (Kick)', 'Mass kicked members');
             return;
@@ -935,10 +1104,10 @@ client.on('guildMemberRemove', async function (member) {
 
   if (settings.features.antiPrune) {
     const prune = await fetchEntry(guild, AuditLogEvent.MemberPrune, member.id);
-    if (prune && prune.executor && !db.isFeatureWhitelisted(guild.id, 'antiPrune', prune.executor.id)) {
+    if (prune && prune.executor && !isProtectedUser(prune.executor.id) && !db.isFeatureWhitelisted(guild.id, 'antiPrune', prune.executor.id)) {
       if (isTrusted(guild, settings, prune.executor.id, 'antiPrune')) {
         if (settings.features.antiBetrayal && !db.isFeatureWhitelisted(guild.id, 'antiBetrayal', prune.executor.id)) {
-          const rogue = hit(guild.id, prune.executor.id, 'betray:prune', 15000, 3);
+          const rogue = hit(guild.id, prune.executor.id, 'betray:prune', 15000, 1);
           if (rogue) {
             await betray(guild, settings, prune.executor.id, 'Anti Betrayal (Prune)', 'Mass pruned members');
           }
@@ -962,6 +1131,7 @@ client.on('guildMemberAdd', function (member) {
     action: 'Anti Bot Add',
     reason: 'Added unauthorized bot ' + member.user.tag,
     massKey: 'botAdd',
+    betrayalLimit: 1,
     revert: function () {
       return member.kick('Zyron Anti-Nuke: unauthorized bot.');
     }
@@ -982,6 +1152,7 @@ client.on('channelCreate', function (channel) {
     action: 'Anti Channel Create',
     reason: 'Created channel #' + channel.name,
     massKey: 'channelCreate',
+    betrayalLimit: 1,
     revert: function () {
       return channel.delete('Zyron Anti-Nuke: unauthorized channel creation.');
     }
@@ -1017,7 +1188,8 @@ client.on('channelDelete', async function (channel) {
     targetId: channel.id,
     action: 'Anti Channel Delete',
     reason: 'Deleted channel #' + channel.name,
-    massKey: 'channelDelete'
+    massKey: 'channelDelete',
+    betrayalLimit: 1
   });
 });
 
@@ -1050,6 +1222,7 @@ client.on('roleCreate', function (role) {
     action: 'Anti Role Create',
     reason: 'Created role ' + role.name,
     massKey: 'roleCreate',
+    betrayalLimit: 1,
     revert: function () {
       return role.delete('Zyron Anti-Nuke: unauthorized role creation.');
     }
@@ -1066,7 +1239,8 @@ client.on('roleDelete', function (role) {
     targetId: role.id,
     action: 'Anti Role Delete',
     reason: 'Deleted role ' + role.name,
-    massKey: 'roleDelete'
+    massKey: 'roleDelete',
+    betrayalLimit: 1
   });
 });
 
@@ -1078,12 +1252,13 @@ client.on('roleUpdate', async function (oldRole, newRole) {
   const entry = await fetchEntry(guild, AuditLogEvent.RoleUpdate, newRole.id);
   if (!entry || !entry.executor) return;
   if (entry.executor.id === client.user.id) return;
+  if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiRoleUpdate', entry.executor.id)) return;
 
   if (isTrusted(guild, settings, entry.executor.id, 'antiRoleUpdate')) {
     if (!settings.features.antiBetrayal || db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) return;
 
-    const rogue = hit(guild.id, entry.executor.id, 'betray:roleUpdate', 15000, 3);
+    const rogue = hit(guild.id, entry.executor.id, 'betray:roleUpdate', 15000, 1);
     if (!rogue) return;
 
     await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Role Update)', 'Repeated role updates by a trusted user');
@@ -1123,12 +1298,13 @@ client.on('webhookUpdate', async function (channel) {
   if (!entry) entry = await fetchEntry(guild, AuditLogEvent.WebhookUpdate, null);
   if (!entry || !entry.executor) return;
   if (entry.executor.id === client.user.id) return;
+  if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiWebhook', entry.executor.id)) return;
 
   if (isTrusted(guild, settings, entry.executor.id, 'antiWebhook')) {
     if (!settings.features.antiBetrayal || db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) return;
 
-    const rogue = hit(guild.id, entry.executor.id, 'betray:webhook', 15000, 3);
+    const rogue = hit(guild.id, entry.executor.id, 'betray:webhook', 15000, 1);
     if (!rogue) return;
 
     await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Webhook)', 'Repeated webhook changes by a trusted user');
@@ -1158,12 +1334,13 @@ client.on('guildUpdate', async function (oldGuild, newGuild) {
   const entry = await fetchEntry(guild, AuditLogEvent.GuildUpdate, guild.id);
   if (!entry || !entry.executor) return;
   if (entry.executor.id === client.user.id) return;
+  if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiGuildUpdate', entry.executor.id)) return;
 
   if (isTrusted(guild, settings, entry.executor.id, 'antiGuildUpdate')) {
     if (!settings.features.antiBetrayal || db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) return;
 
-    const rogue = hit(guild.id, entry.executor.id, 'betray:guildUpdate', 15000, 3);
+    const rogue = hit(guild.id, entry.executor.id, 'betray:guildUpdate', 15000, 1);
     if (!rogue) return;
 
     await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Guild Update)', 'Repeated server changes by a trusted user');
@@ -1189,11 +1366,12 @@ client.on('guildIntegrationsUpdate', async function (guild) {
   if (!entry) entry = await fetchEntry(guild, AuditLogEvent.IntegrationDelete, null);
   if (!entry || !entry.executor) return;
   if (entry.executor.id === client.user.id) return;
+  if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiIntegration', entry.executor.id)) return;
 
   if (isTrusted(guild, settings, entry.executor.id, 'antiIntegration')) {
     if (settings.features.antiBetrayal && !db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) {
-      const rogue = hit(guild.id, entry.executor.id, 'betray:integration', 15000, 3);
+      const rogue = hit(guild.id, entry.executor.id, 'betray:integration', 15000, 1);
       if (rogue) {
         await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Integration)', 'Repeated integration changes by a trusted user');
       }
@@ -1221,11 +1399,12 @@ client.on('guildMemberUpdate', async function (oldMember, newMember) {
   const entry = await fetchEntry(guild, AuditLogEvent.MemberRoleUpdate, newMember.id);
   if (!entry || !entry.executor) return;
   if (entry.executor.id === client.user.id) return;
+  if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiMemberUpdate', entry.executor.id)) return;
 
   if (isTrusted(guild, settings, entry.executor.id, 'antiMemberUpdate')) {
     if (settings.features.antiBetrayal && !db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) {
-      const rogue = hit(guild.id, entry.executor.id, 'betray:memberUpdate', 15000, 3);
+      const rogue = hit(guild.id, entry.executor.id, 'betray:memberUpdate', 15000, 1);
       if (rogue) {
         await newMember.roles.set(oldMember.roles.cache.map(function (role) {
           return role.id;
@@ -1255,6 +1434,8 @@ function raidKey(guildId, userId) {
 }
 
 async function punishRaidMember(guild, settings, member, ai) {
+  if (isProtectedUser(member.id)) return null;
+
   const key = raidKey(guild.id, member.id);
   if (raidPunished.has(key)) return null;
   raidPunished.set(key, true);

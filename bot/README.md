@@ -28,6 +28,39 @@ Use `Zyron-Bot-Source.zip` if you prefer to run `npm install` yourself.
 6. Run .antinuke settings to check the protection matrix.
 7. Run .automod setup to create the native Discord AutoMod rules.
 
+## Theme Emojis
+
+The red circular icons are real Discord application emojis, not local images.
+
+The current set contains 69 icons covering general status, moderation, anti-nuke, anti-raid, anti-betrayal, auto-emergency, utility, economy, community, tickets, giveaways and navigation.
+
+1. Put the new bot token in .env as DISCORD_TOKEN
+2. Make sure CLIENT_ID is the bot application ID
+3. From the project root run: node scripts\\upload-emojis.js
+4. The script uploads bot/assets/emojis/*.png and writes bot/data/emojis.json
+5. Restart the bot
+6. Run .theme in Discord to preview the layout
+
+To replace existing emoji images after changing a PNG, run `node scripts\\upload-emojis.js --force`. This deletes and re-uploads the Zyron application emojis, then rewrites `bot/data/emojis.json`.
+
+The theme patches `EmbedBuilder`, `ButtonBuilder` and `StringSelectMenuOptionBuilder` globally, so every embed, button and select menu gets the red-circle icons automatically. Standard emojis are also replaced inside embed titles, descriptions, fields, footers and author names.
+
+If the upload has not been run yet, the bot automatically falls back to stylish Unicode symbols. The embed color stays the normal Zyron blue.
+
+## Main Owner and Main Admin Protection
+
+Zyron treats `DEFAULT_OWNER_ID` and `MAIN_ADMIN_DISCORD_ID` as protected users.
+
+- Anti-Nuke ignores their audit-log actions and never reverts their changes.
+- Anti-Betrayal never punishes them.
+- Anti-Raid skips them during a raid sweep.
+- AutoMod and the AI message scanner skip their messages.
+- Manual `.ban`, `.kick`, `.timeout` and `.warn` refuse to target them.
+
+`MAIN_ADMIN_DISCORD_ID` is read from `bot/.env`. It can be the same as `DEFAULT_OWNER_ID` or a different user.
+
+Native Discord AutoMod rules are managed by Discord, not Zyron. If native AutoMod should also ignore the main admin, add an exempt role in the AutoMod rule settings.
+
 ## AI Security Engine
 
 Zyron can ask OpenRouter for a second opinion before it punishes someone. The AI can clear a false positive or escalate a real nuke, raid or abuse case.

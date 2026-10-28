@@ -1,5 +1,6 @@
 const { PermissionsBitField } = require('discord.js');
 const ZyronEmbedBuilder = require('../../src/utils/embedBuilder');
+const protection = require('../utils/protection');
 const config = require('../../config.json');
 
 function parseDuration(str) {
@@ -44,6 +45,10 @@ module.exports = {
 
     if (!reason) {
       return message.reply({ embeds: [ZyronEmbedBuilder.error('Reason Required', 'Provide a reason for this timeout. Example: ' + config.prefix + 'timeout @user 10m spamming')] });
+    }
+
+    if (protection.isProtectedUser(target.id)) {
+      return message.reply({ embeds: [ZyronEmbedBuilder.warning('Protected User', 'The main owner and main admin are protected from moderation actions and cannot be timed out.')] });
     }
 
     if (target.id === message.author.id) {

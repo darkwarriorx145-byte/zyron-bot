@@ -82,10 +82,116 @@ const FEATURE_CATALOG = [
 ];
 
 const FEATURE_GROUPS = [
-  { key: 'security', label: 'Server & Role Security', description: 'Reverts and blocks destructive staff actions.' },
+  { key: 'security', label: 'Anti-Nuke Guards', description: 'Reverts and blocks destructive staff actions.' },
   { key: 'chat', label: 'Chat Filters', description: 'Keeps conversations clean and stops spam.' },
-  { key: 'recovery', label: 'Recovery & Automation', description: 'Backups, raids and automatic lockdowns.' }
+  { key: 'recovery', label: 'Anti-Raid & Recovery', description: 'Backups, raids and automatic lockdowns.' }
 ];
+
+const FEATURE_LIBRARY = [
+  {
+    key: 'antinuke',
+    icon: 'shield',
+    title: 'Anti-Nuke',
+    description: 'Reverts mass bans, kicks, channel deletes, role changes and webhook abuse before the server is lost.',
+    tab: 'antinuke',
+    badge: '24 guards'
+  },
+  {
+    key: 'antiraid',
+    icon: 'zap',
+    title: 'Anti-Raid',
+    description: 'Detects join floods, locks the server down and kicks or bans raiders based on your policy.',
+    tab: 'antiraid',
+    badge: 'Auto lockdown'
+  },
+  {
+    key: 'ai',
+    icon: 'brain',
+    title: 'AI Guard',
+    description: 'OpenRouter gives a second opinion before Zyron punishes a nuke, raid or abusive message.',
+    tab: 'ai',
+    badge: 'Smart'
+  },
+  {
+    key: 'automod',
+    icon: 'message-square',
+    title: 'AutoMod',
+    description: 'Spam, invite links, mass mentions and profanity filters with clear staff logs.',
+    tab: 'automod',
+    badge: 'Chat safe'
+  },
+  {
+    key: 'tickets',
+    icon: 'ticket',
+    title: 'Tickets',
+    description: 'Design the panel, edit every button and open private support channels instantly.',
+    tab: 'tickets',
+    badge: 'Custom'
+  },
+  {
+    key: 'staff',
+    icon: 'user-check',
+    title: 'Staff Applications',
+    description: 'Build your own questions, choose the application channel and assign the accepted role automatically.',
+    tab: 'staff',
+    badge: 'Hiring'
+  },
+  {
+    key: 'giveaways',
+    icon: 'gift',
+    title: 'Giveaways',
+    description: 'Reaction giveaways with start, end and reroll controls, managed from Discord.',
+    tab: 'giveaways',
+    badge: 'Engagement'
+  },
+  {
+    key: 'economy',
+    icon: 'coins',
+    title: 'Economy',
+    description: 'A separate coin economy for every server with daily and invite rewards you control.',
+    tab: 'economy',
+    badge: 'Per-server'
+  }
+];
+
+const DEFAULT_TICKET_TITLE = '🎫 Zyron Support Tickets';
+const DEFAULT_TICKET_DESCRIPTION =
+  'Need help from our staff team?\n\n' +
+  'Click a button below and a private channel will open instantly.\n\n' +
+  '{{buttons}}\n\n' +
+  '**Inside a ticket**\n' +
+  '• Claim — staff member takes the ticket\n' +
+  '• Rename — change the ticket channel name\n' +
+  '• Add User — invite someone to the ticket\n' +
+  '• Remove User — remove someone from the ticket\n' +
+  '• Close — delete the ticket when finished\n\n' +
+  '**Rules**\n' +
+  '• One ticket per member\n' +
+  '• Do not open fake tickets\n' +
+  '• Staff will reply as soon as possible';
+const DEFAULT_TICKET_FOOTER = 'Zyron • Powered by Zyra Nodes Limited';
+
+const DEFAULT_STAFF_TITLE = '📝 Zyron Staff Applications';
+const DEFAULT_STAFF_DESCRIPTION =
+  'Want to join the staff team?\n\n' +
+  'Click **Apply Now** and fill in the application form.\n' +
+  'Our management team will review it and reply by DM.\n\n' +
+  '**Requirements**\n' +
+  '• Be active in the server\n' +
+  '• Be respectful and mature\n' +
+  '• No recent punishments';
+const DEFAULT_STAFF_FOOTER = 'Zyron • Powered by Zyra Nodes Limited';
+
+const DEFAULT_STAFF_QUESTIONS = [
+  { label: 'Name / nickname', placeholder: 'Your name or nickname', style: 'short', required: true, maxLength: 50 },
+  { label: 'Age', placeholder: 'Your age', style: 'short', required: true, maxLength: 3 },
+  { label: 'Timezone / country', placeholder: 'e.g. GMT+5 / India', style: 'short', required: true, maxLength: 60 },
+  { label: 'Previous staff experience', placeholder: 'Servers, roles and responsibilities', style: 'paragraph', required: true, maxLength: 500 },
+  { label: 'Why should we pick you?', placeholder: 'Tell us about yourself', style: 'paragraph', required: true, maxLength: 800 }
+];
+
+const TICKET_BUTTON_STYLES = ['primary', 'secondary', 'success', 'danger'];
+const STAFF_QUESTION_STYLES = ['short', 'paragraph'];
 
 function loadBotConfig() {
   const candidates = [
@@ -192,6 +298,36 @@ function defaultGuild() {
     aiAction: 'auto',
     economyDaily: 100,
     economyInvite: 25,
+    ticketCategory: null,
+    ticketLogChannel: null,
+    ticketStaffRole: null,
+    ticketStaffRoles: [],
+    ticketNamePattern: 'ticket-{{ticket_number}}',
+    ticketAiEnabled: true,
+    ticketCounter: 0,
+    ticketPanelChannel: null,
+    ticketPanelTitle: DEFAULT_TICKET_TITLE,
+    ticketPanelDescription: DEFAULT_TICKET_DESCRIPTION,
+    ticketPanelFooter: DEFAULT_TICKET_FOOTER,
+    ticketCreateLabel: 'Create Ticket',
+    ticketCreateEmoji: '🎫',
+    ticketButtons: [],
+    applicationChannel: null,
+    staffApplyAcceptRole: null,
+    staffApplyAcceptRoles: [],
+    appealInviteChannel: null,
+    warningKickThreshold: 5,
+    staffApplyPanelTitle: DEFAULT_STAFF_TITLE,
+    staffApplyPanelDescription: DEFAULT_STAFF_DESCRIPTION,
+    staffApplyPanelFooter: DEFAULT_STAFF_FOOTER,
+    staffApplyButtonLabel: 'Apply Now',
+    staffApplyButtonEmoji: '📝',
+    staffApplyModalTitle: 'Staff Application',
+    staffApplyAcceptMessage: 'Congratulations! Your staff application in **{server}** was accepted. A manager will contact you soon.',
+    staffApplyDenyMessage: 'Unfortunately your staff application in **{server}** was denied. You can apply again later.',
+    staffApplyQuestions: DEFAULT_STAFF_QUESTIONS.map(function (question) {
+      return Object.assign({}, question);
+    }),
     extraOwners: [],
     whitelist: [],
     featureWhitelist: {},
@@ -209,6 +345,28 @@ function normalizeGuild(guild) {
   if (merged.aiModel === undefined) merged.aiModel = null;
   if (merged.aiConfidence === undefined) merged.aiConfidence = 0.6;
   if (merged.aiAction === undefined) merged.aiAction = 'auto';
+  if (!Array.isArray(merged.ticketButtons)) merged.ticketButtons = [];
+  if (!Array.isArray(merged.ticketStaffRoles)) merged.ticketStaffRoles = [];
+  if (!Array.isArray(merged.staffApplyAcceptRoles)) merged.staffApplyAcceptRoles = [];
+  if (!merged.ticketNamePattern) merged.ticketNamePattern = base.ticketNamePattern;
+  if (merged.ticketAiEnabled === undefined) merged.ticketAiEnabled = true;
+  if (merged.warningKickThreshold === undefined) merged.warningKickThreshold = 5;
+  if (!Array.isArray(merged.staffApplyQuestions) || merged.staffApplyQuestions.length === 0) {
+    merged.staffApplyQuestions = base.staffApplyQuestions.map(function (question) {
+      return Object.assign({}, question);
+    });
+  }
+  if (!merged.ticketPanelTitle) merged.ticketPanelTitle = base.ticketPanelTitle;
+  if (!merged.ticketPanelDescription) merged.ticketPanelDescription = base.ticketPanelDescription;
+  if (!merged.ticketPanelFooter) merged.ticketPanelFooter = base.ticketPanelFooter;
+  if (!merged.ticketCreateLabel) merged.ticketCreateLabel = base.ticketCreateLabel;
+  if (!merged.ticketCreateEmoji) merged.ticketCreateEmoji = base.ticketCreateEmoji;
+  if (!merged.staffApplyPanelTitle) merged.staffApplyPanelTitle = base.staffApplyPanelTitle;
+  if (!merged.staffApplyPanelDescription) merged.staffApplyPanelDescription = base.staffApplyPanelDescription;
+  if (!merged.staffApplyPanelFooter) merged.staffApplyPanelFooter = base.staffApplyPanelFooter;
+  if (!merged.staffApplyButtonLabel) merged.staffApplyButtonLabel = base.staffApplyButtonLabel;
+  if (!merged.staffApplyButtonEmoji) merged.staffApplyButtonEmoji = base.staffApplyButtonEmoji;
+  if (!merged.staffApplyModalTitle) merged.staffApplyModalTitle = base.staffApplyModalTitle;
   return merged;
 }
 
@@ -330,6 +488,71 @@ async function loadGuildSettings(guildId) {
     }
   }
   return normalizeGuild(readBotDB().guilds[guildId]);
+}
+
+function localActivity(guildId) {
+  const data = readBotDB();
+  const tickets = Array.isArray(data.tickets && data.tickets[guildId]) ? data.tickets[guildId] : [];
+  const applications = Array.isArray(data.staffApplications && data.staffApplications[guildId])
+    ? data.staffApplications[guildId]
+    : [];
+  const appeals = Array.isArray(data.appeals && data.appeals[guildId]) ? data.appeals[guildId] : [];
+  const counts = {};
+  tickets.forEach(function (ticket) {
+    if (ticket.status !== 'closed' || !ticket.closedBy) return;
+    counts[ticket.closedBy] = (counts[ticket.closedBy] || 0) + 1;
+  });
+  const closedBy = Object.keys(counts).map(function (userId) {
+    return { userId: userId, name: userId, count: counts[userId] };
+  }).sort(function (a, b) { return b.count - a.count; });
+
+  return {
+    tickets: tickets.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 25),
+    staffApplications: applications.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 25),
+    appeals: appeals.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 25),
+    ticketStats: {
+      total: tickets.length,
+      open: tickets.filter(function (t) { return t.status === 'open'; }).length,
+      closed: tickets.filter(function (t) { return t.status === 'closed'; }).length,
+      closedBy: closedBy
+    },
+    staffStats: {
+      total: applications.length,
+      pending: applications.filter(function (a) { return a.status === 'pending'; }).length,
+      accepted: applications.filter(function (a) { return a.status === 'accepted'; }).length,
+      denied: applications.filter(function (a) { return a.status === 'denied'; }).length,
+      reviewedBy: []
+    },
+    appealStats: {
+      total: appeals.length,
+      pending: appeals.filter(function (a) { return a.status === 'pending'; }).length,
+      approved: appeals.filter(function (a) { return a.status === 'approved'; }).length,
+      denied: appeals.filter(function (a) { return a.status === 'denied'; }).length
+    },
+    staffAdvice: closedBy.slice(0, 8).map(function (row) {
+      return {
+        userId: row.userId,
+        name: row.name,
+        closes: row.count,
+        action: row.count >= 3 ? 'promote' : 'demote',
+        reason: row.count >= 3
+          ? 'they closed ' + row.count + ' tickets'
+          : 'they have no recent ticket closes'
+      };
+    })
+  };
+}
+
+async function loadGuildActivity(guildId) {
+  if (REMOTE_MODE) {
+    try {
+      const result = await botApi.getActivity(guildId);
+      return result.activity;
+    } catch (err) {
+      console.warn('Bot API activity lookup failed; using local bot DB:', err.message);
+    }
+  }
+  return localActivity(guildId);
 }
 
 async function saveGuildSettings(guildId, updates) {
@@ -462,6 +685,181 @@ function clampConfidence(value) {
   if (isNaN(number)) return 0;
   if (number > 1 && number <= 100) number = number / 100;
   return Math.max(0, Math.min(1, number));
+}
+
+function cleanText(value, maxLength) {
+  if (value === null || value === undefined) return null;
+  return String(value).trim().slice(0, maxLength);
+}
+
+function cleanId(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (!/^\d{5,25}$/.test(text)) return undefined;
+  return text;
+}
+
+function sanitizeTicketButtons(list) {
+  const buttons = [];
+  if (!Array.isArray(list)) return buttons;
+
+  list.slice(0, 9).forEach(function (button) {
+    if (!button || typeof button !== 'object') return;
+    const label = cleanText(button.label, 80);
+    if (!label) return;
+    const style = TICKET_BUTTON_STYLES.indexOf(button.style) !== -1 ? button.style : 'secondary';
+    buttons.push({
+      label: label,
+      emoji: cleanText(button.emoji, 64) || '🎫',
+      message: cleanText(button.message, 200) || 'Support request',
+      style: style
+    });
+  });
+
+  return buttons;
+}
+
+function sanitizeStaffQuestions(list) {
+  const questions = [];
+  if (!Array.isArray(list)) return questions;
+
+  list.slice(0, 5).forEach(function (question) {
+    if (!question || typeof question !== 'object') return;
+    const label = cleanText(question.label, 45);
+    if (!label) return;
+    const style = STAFF_QUESTION_STYLES.indexOf(question.style) !== -1 ? question.style : 'short';
+    let maxLength = parseInt(question.maxLength, 10);
+    if (isNaN(maxLength)) maxLength = style === 'paragraph' ? 500 : 100;
+    maxLength = Math.max(1, Math.min(1000, maxLength));
+    questions.push({
+      label: label,
+      placeholder: cleanText(question.placeholder, 100) || '',
+      style: style,
+      required: question.required !== false,
+      maxLength: maxLength
+    });
+  });
+
+  return questions;
+}
+
+function buttonStyleId(style) {
+  if (style === 'primary') return 1;
+  if (style === 'success') return 3;
+  if (style === 'danger') return 4;
+  return 2;
+}
+
+function emojiPayload(value) {
+  const text = String(value || '').trim();
+  if (!text) return null;
+  const custom = /^<a?:([a-zA-Z0-9_]+):(\d+)>$/.exec(text);
+  if (custom) {
+    return { name: custom[1], id: custom[2], animated: text.indexOf('<a:') === 0 };
+  }
+  return { name: text };
+}
+
+function ticketButtonLines(buttons) {
+  if (!buttons || buttons.length === 0) return '';
+  return '**Ticket Types**\n' + buttons.map(function (button) {
+    return '• ' + (button.emoji ? button.emoji + ' ' : '') + '**' + button.label + '** — ' + button.message;
+  }).join('\n');
+}
+
+function buildTicketComponents(settings) {
+  const components = [
+    {
+      type: 2,
+      style: 1,
+      label: settings.ticketCreateLabel || 'Create Ticket',
+      custom_id: 'ticket:create',
+      emoji: emojiPayload(settings.ticketCreateEmoji || '🎫')
+    }
+  ];
+
+  (settings.ticketButtons || []).slice(0, 9).forEach(function (button, index) {
+    components.push({
+      type: 2,
+      style: buttonStyleId(button.style),
+      label: button.label,
+      custom_id: 'ticket:custom:' + index,
+      emoji: emojiPayload(button.emoji || '🎫')
+    });
+  });
+
+  const rows = [];
+  for (let i = 0; i < components.length; i += 5) {
+    rows.push({ type: 1, components: components.slice(i, i + 5) });
+  }
+  return rows;
+}
+
+function ticketPanelPayload(settings) {
+  const descriptionTemplate = settings.ticketPanelDescription || DEFAULT_TICKET_DESCRIPTION;
+  const description = descriptionTemplate.split('{{buttons}}').join(ticketButtonLines(settings.ticketButtons || []));
+
+  return {
+    embeds: [
+      {
+        color: 0x5865f2,
+        title: settings.ticketPanelTitle || DEFAULT_TICKET_TITLE,
+        description: description.slice(0, 4096),
+        footer: { text: (settings.ticketPanelFooter || DEFAULT_TICKET_FOOTER).slice(0, 2048) },
+        timestamp: new Date().toISOString()
+      }
+    ],
+    components: buildTicketComponents(settings)
+  };
+}
+
+function staffPanelPayload(settings) {
+  return {
+    embeds: [
+      {
+        color: 0x5865f2,
+        title: settings.staffApplyPanelTitle || DEFAULT_STAFF_TITLE,
+        description: (settings.staffApplyPanelDescription || DEFAULT_STAFF_DESCRIPTION).slice(0, 4096),
+        footer: { text: (settings.staffApplyPanelFooter || DEFAULT_STAFF_FOOTER).slice(0, 2048) },
+        timestamp: new Date().toISOString()
+      }
+    ],
+    components: [
+      {
+        type: 1,
+        components: [
+          {
+            type: 2,
+            style: 3,
+            label: settings.staffApplyButtonLabel || 'Apply Now',
+            custom_id: 'staff-apply:open',
+            emoji: emojiPayload(settings.staffApplyButtonEmoji || '📝')
+          }
+        ]
+      }
+    ]
+  };
+}
+
+async function sendDiscordPanel(channelId, payload) {
+  const token = process.env.BOT_TOKEN || process.env.DISCORD_TOKEN || '';
+  if (!token) throw new Error('BOT_TOKEN is not set on the dashboard.');
+  if (!/^\d{5,25}$/.test(String(channelId || ''))) throw new Error('Enter a valid Discord channel ID.');
+
+  const response = await axios.post(
+    'https://discord.com/api/v10/channels/' + channelId + '/messages',
+    payload,
+    {
+      headers: {
+        Authorization: 'Bot ' + token,
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000
+    }
+  );
+
+  return response.data || {};
 }
 
 async function callOpenRouter(model, system, user, jsonMode) {
@@ -795,6 +1193,7 @@ app.get('/dashboard', requireAuth, async function (req, res, next) {
     const withBot = guilds.filter(function (guild) {
       return guild.hasBot;
     }).length;
+    const primaryServer = guilds.filter(function (guild) { return guild.hasBot; })[0] || guilds[0] || null;
 
     return res.render('server-picker', {
       servers: guilds,
@@ -803,9 +1202,13 @@ app.get('/dashboard', requireAuth, async function (req, res, next) {
         withBot: withBot,
         withoutBot: guilds.length - withBot
       },
+      featureLibrary: FEATURE_LIBRARY,
+      primaryServerId: primaryServer ? primaryServer.id : null,
       botGuildCount: Object.keys(botMap).length,
       botApiOnline: REMOTE_MODE ? botApiReachable : null,
-      botGuildSource: botGuildCache.source
+      botGuildSource: botGuildCache.source,
+      botTokenConfigured: Boolean(process.env.BOT_TOKEN || process.env.DISCORD_TOKEN),
+      aiReady: Boolean(process.env.OPENROUTER_API_KEY)
     });
   } catch (err) {
     return next(err);
@@ -840,17 +1243,44 @@ app.get('/server/:id', requireAuth, async function (req, res, next) {
       return String(guild.id) === serverId;
     })[0] || null;
     const botGuild = botMap[serverId];
+    let activity = null;
+    try {
+      activity = await loadGuildActivity(serverId);
+    } catch (err) {
+      console.warn('Could not load server activity:', err.message);
+    }
 
     return res.render('server', {
       serverId: serverId,
       serverName: (userGuild && userGuild.name) || (botGuild && botGuild.name) || ('Server ' + serverId),
       serverIcon: guildIconUrl(serverId, (userGuild && userGuild.icon) || (botGuild && botGuild.icon)),
       settings: settings,
+      activity: activity || {
+        tickets: [],
+        staffApplications: [],
+        appeals: [],
+        ticketStats: { total: 0, open: 0, closed: 0, closedBy: [] },
+        staffStats: { total: 0, pending: 0, accepted: 0, denied: 0, reviewedBy: [] },
+        appealStats: { total: 0, pending: 0, approved: 0, denied: 0 },
+        staffAdvice: []
+      },
       featureCatalog: FEATURE_CATALOG,
       featureGroups: FEATURE_GROUPS,
+      featureLibrary: FEATURE_LIBRARY,
+      initialTab: String(req.query.tab || 'overview').replace(/[^a-z-]/g, ''),
       aiReady: Boolean(process.env.OPENROUTER_API_KEY),
       defaultModel: process.env.OPENROUTER_MODEL || 'openrouter/auto',
-      botApiOnline: REMOTE_MODE ? botApiReachable : null
+      botApiOnline: REMOTE_MODE ? botApiReachable : null,
+      botTokenConfigured: Boolean(process.env.BOT_TOKEN || process.env.DISCORD_TOKEN),
+      ticketButtonStyles: TICKET_BUTTON_STYLES,
+      staffQuestionStyles: STAFF_QUESTION_STYLES,
+      defaultTicketTitle: DEFAULT_TICKET_TITLE,
+      defaultTicketDescription: DEFAULT_TICKET_DESCRIPTION,
+      defaultTicketFooter: DEFAULT_TICKET_FOOTER,
+      defaultStaffTitle: DEFAULT_STAFF_TITLE,
+      defaultStaffDescription: DEFAULT_STAFF_DESCRIPTION,
+      defaultStaffFooter: DEFAULT_STAFF_FOOTER,
+      defaultStaffQuestions: DEFAULT_STAFF_QUESTIONS
     });
   } catch (err) {
     return next(err);
@@ -915,16 +1345,82 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     if (!isNaN(invite)) updates.economyInvite = Math.max(0, Math.min(100000, invite));
   }
 
-  const idFields = ['logChannel', 'autoRoleId', 'autoRoleBotId', 'boosterRoleId'];
+  const idFields = [
+    'logChannel',
+    'autoRoleId',
+    'autoRoleBotId',
+    'boosterRoleId',
+    'ticketCategory',
+    'ticketStaffRole',
+    'ticketPanelChannel',
+    'applicationChannel',
+    'staffApplyAcceptRole',
+    'appealInviteChannel'
+  ];
   idFields.forEach(function (field) {
     if (body[field] === undefined) return;
-    const value = body[field] === null ? '' : String(body[field]).trim();
-    if (!value) {
-      updates[field] = null;
-    } else if (/^\d{5,25}$/.test(value)) {
-      updates[field] = value;
-    }
+    const value = cleanId(body[field]);
+    if (value === undefined) return;
+    updates[field] = value;
   });
+
+  const ticketTextFields = {
+    ticketPanelTitle: 120,
+    ticketPanelDescription: 4000,
+    ticketPanelFooter: 300,
+    ticketCreateLabel: 80,
+    ticketCreateEmoji: 64
+  };
+  Object.keys(ticketTextFields).forEach(function (field) {
+    if (body[field] !== undefined) updates[field] = cleanText(body[field], ticketTextFields[field]);
+  });
+
+  if (Array.isArray(body.ticketButtons)) {
+    updates.ticketButtons = sanitizeTicketButtons(body.ticketButtons);
+  }
+
+  if (body.ticketAiEnabled !== undefined) updates.ticketAiEnabled = Boolean(body.ticketAiEnabled);
+
+  if (typeof body.ticketNamePattern === 'string') {
+    updates.ticketNamePattern = body.ticketNamePattern.trim().slice(0, 100) || 'ticket-{{ticket_number}}';
+  }
+
+  if (Array.isArray(body.ticketStaffRoles)) {
+    updates.ticketStaffRoles = body.ticketStaffRoles
+      .map(function (id) { return cleanId(id); })
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+
+  if (Array.isArray(body.staffApplyAcceptRoles)) {
+    updates.staffApplyAcceptRoles = body.staffApplyAcceptRoles
+      .map(function (id) { return cleanId(id); })
+      .filter(Boolean)
+      .slice(0, 10);
+  }
+
+  if (body.warningKickThreshold !== undefined) {
+    const threshold = parseInt(body.warningKickThreshold, 10);
+    if (!isNaN(threshold)) updates.warningKickThreshold = Math.max(1, Math.min(20, threshold));
+  }
+
+  const staffTextFields = {
+    staffApplyPanelTitle: 120,
+    staffApplyPanelDescription: 4000,
+    staffApplyPanelFooter: 300,
+    staffApplyButtonLabel: 80,
+    staffApplyButtonEmoji: 64,
+    staffApplyModalTitle: 45,
+    staffApplyAcceptMessage: 1000,
+    staffApplyDenyMessage: 1000
+  };
+  Object.keys(staffTextFields).forEach(function (field) {
+    if (body[field] !== undefined) updates[field] = cleanText(body[field], staffTextFields[field]);
+  });
+
+  if (Array.isArray(body.staffApplyQuestions)) {
+    updates.staffApplyQuestions = sanitizeStaffQuestions(body.staffApplyQuestions);
+  }
 
   if (body.features && typeof body.features === 'object') {
     const features = Object.assign({}, existing.features);
@@ -941,6 +1437,85 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     return res.json({ ok: true, settings: merged });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/server/:id/appeal/:caseId', requireAuth, async function (req, res) {
+  const serverId = String(req.params.id);
+  const caseId = String(req.params.caseId || '');
+  if (!canManageGuild(req.user, serverId)) {
+    return res.status(403).json({ ok: false, error: 'You cannot manage this server.' });
+  }
+  if (!REMOTE_MODE) {
+    return res.status(503).json({ ok: false, error: 'Start the bot API to review appeals.' });
+  }
+
+  const action = String((req.body || {}).action || '').toLowerCase();
+  if (['approve', 'deny'].indexOf(action) === -1) {
+    return res.status(400).json({ ok: false, error: 'Action must be approve or deny.' });
+  }
+
+  try {
+    const result = await botApi.reviewAppeal(serverId, caseId, action, req.user.id);
+    return res.json({ ok: true, appeal: result.appeal });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/server/:id/staff/action', requireAuth, async function (req, res) {
+  const serverId = String(req.params.id);
+  if (!canManageGuild(req.user, serverId)) {
+    return res.status(403).json({ ok: false, error: 'You cannot manage this server.' });
+  }
+  if (!REMOTE_MODE) {
+    return res.status(503).json({ ok: false, error: 'Start the bot API to change staff roles.' });
+  }
+
+  const body = req.body || {};
+  try {
+    const result = await botApi.staffAction(serverId, {
+      action: body.action,
+      userId: body.userId,
+      roleId: body.roleId
+    });
+    return res.json({ ok: true, result: result.result });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/server/:id/ticket/panel', requireAuth, async function (req, res) {
+  const serverId = String(req.params.id);
+  if (!canManageGuild(req.user, serverId)) {
+    return res.status(403).json({ ok: false, error: 'You cannot manage this server.' });
+  }
+
+  try {
+    const settings = await loadGuildSettings(serverId);
+    const body = req.body || {};
+    const channelId = cleanId(body.channelId) || settings.ticketPanelChannel;
+    const message = await sendDiscordPanel(channelId, ticketPanelPayload(settings));
+    return res.json({ ok: true, channelId: String(channelId), messageId: message.id || null });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+app.post('/api/server/:id/staff/panel', requireAuth, async function (req, res) {
+  const serverId = String(req.params.id);
+  if (!canManageGuild(req.user, serverId)) {
+    return res.status(403).json({ ok: false, error: 'You cannot manage this server.' });
+  }
+
+  try {
+    const settings = await loadGuildSettings(serverId);
+    const body = req.body || {};
+    const channelId = cleanId(body.channelId) || settings.applicationChannel;
+    const message = await sendDiscordPanel(channelId, staffPanelPayload(settings));
+    return res.json({ ok: true, channelId: String(channelId), messageId: message.id || null });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
   }
 });
 

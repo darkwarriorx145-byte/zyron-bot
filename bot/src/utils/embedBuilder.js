@@ -1,5 +1,8 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('../../config.json');
+const theme = require('./theme');
+
+const emoji = theme.emoji;
 
 function userTag(target) {
   if (!target) return 'Unknown';
@@ -9,20 +12,86 @@ function userTag(target) {
   return String(target.id ? target.id : target);
 }
 
+function section(title) {
+  return '**' + title + '**';
+}
+
+function line(key, label, value) {
+  return emoji(key) + ' **' + label + ':** ' + value;
+}
+
+function field(key, label, value, inline) {
+  return {
+    name: emoji(key) + ' ' + label,
+    value: String(value),
+    inline: Boolean(inline)
+  };
+}
+
+function status(value) {
+  return emoji(value ? 'success' : 'error') + ' **' + (value ? 'ON' : 'OFF') + '**';
+}
+
+function formatStamp(date) {
+  const value = date instanceof Date ? date : new Date();
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const day = String(value.getUTCDate()).padStart(2, '0');
+  const month = months[value.getUTCMonth()];
+  const year = value.getUTCFullYear();
+  const minutes = String(value.getUTCMinutes()).padStart(2, '0');
+  const suffix = value.getUTCHours() >= 12 ? 'PM' : 'AM';
+  let hours = value.getUTCHours() % 12;
+
+  if (hours === 0) hours = 12;
+
+  return day + ' ' + month + ' ' + year + ' ' +
+    String(hours).padStart(2, '0') + ':' + minutes + ' ' + suffix + ' UTC';
+}
+
 class ZyronEmbedBuilder {
+  static emoji(key) {
+    return emoji(key);
+  }
+
+  static line(key, label, value) {
+    return line(key, label, value);
+  }
+
+  static section(title) {
+    return section(title);
+  }
+
   static base(options) {
     const opts = options || {};
     const embed = new EmbedBuilder()
-      .setColor(opts.color || config.colors.primary)
+      .setColor(
+        opts.color ||
+        (config.theme && config.theme.color) ||
+        config.colors.primary
+      )
       .setFooter({
-        text: config.botName + ' • Powered by ' + config.company,
+        text:
+          opts.footer ||
+          (config.theme && config.theme.footer) ||
+          (config.botName + ' • Powered by ' + config.company),
         iconURL: opts.footerIcon || undefined
       })
       .setTimestamp();
 
+    if (opts.author) {
+      embed.setAuthor(opts.author);
+    } else if (opts.authorName || opts.authorIcon) {
+      embed.setAuthor({
+        name: opts.authorName || config.botName,
+        iconURL: opts.authorIcon || undefined
+      });
+    }
+
     if (opts.title) embed.setTitle(opts.title);
     if (opts.description) embed.setDescription(opts.description);
-    if (opts.author) embed.setAuthor(opts.author);
     if (opts.thumbnail) embed.setThumbnail(opts.thumbnail);
     if (opts.image) embed.setImage(opts.image);
     if (opts.fields) embed.addFields(opts.fields);
@@ -33,7 +102,7 @@ class ZyronEmbedBuilder {
   static success(title, description) {
     return this.base({
       color: config.colors.success,
-      title: '✅ ' + title,
+      title: emoji('success') + ' ' + title,
       description: description
     });
   }
@@ -41,7 +110,7 @@ class ZyronEmbedBuilder {
   static error(title, description) {
     return this.base({
       color: config.colors.danger,
-      title: '❌ ' + title,
+      title: emoji('error') + ' ' + title,
       description: description
     });
   }
@@ -49,7 +118,7 @@ class ZyronEmbedBuilder {
   static warning(title, description) {
     return this.base({
       color: config.colors.warning,
-      title: '⚠️ ' + title,
+      title: emoji('warning') + ' ' + title,
       description: description
     });
   }
@@ -57,7 +126,7 @@ class ZyronEmbedBuilder {
   static info(title, description) {
     return this.base({
       color: config.colors.primary,
-      title: 'ℹ️ ' + title,
+      title: emoji('info') + ' ' + title,
       description: description
     });
   }
@@ -69,24 +138,65 @@ class ZyronEmbedBuilder {
     const moderator = opts.moderator;
     const reason = opts.reason ? opts.reason : 'No reason provided.';
     const duration = opts.duration;
+    const targetId = target && target.id ? String(target.id) : 'Unknown';
 
     const embed = this.base({
-      color: action.toLowerCase().indexOf('ban') !== -1 ? config.colors.danger : config.colors.warning,
-      title: '🛡️ Moderation Action — ' + action.toUpperCase(),
-      description: 'A moderation disciplinary action has been executed.'
+      color: action.toLowerCase().indexOf('ban') !== -1
+        ? config.colors.danger
+        : config.colors.warning,
+      title: emoji('shield') + ' Moderation Action — ' + action.toUpperCase(),
+      description: [
+        section('Action Details'),
+        line('user', 'Target', userTag(target)),
+        line('mention', 'Mention', targetId === 'Unknown' ? 'Unknown' : '<@' + targetId + '>'),
+        line('id', 'User ID', targetId),
+        '',
+        section('Additional Info'),
+        line('added_by', 'Moderator', userTag(moderator)),
+        line('warn', 'Reason', String(reason)),
+        line('timestamp', 'Timestamp', '<t:' + Math.floor(Date.now() / 1000) + ':F>')
+      ].join('\n')
     });
 
-    embed.addFields(
-      { name: '👤 Target User', value: userTag(target), inline: true },
-      { name: '👮 Moderator', value: userTag(moderator), inline: true },
-      { name: '📝 Reason', value: String(reason), inline: false }
-    );
-
     if (duration) {
-      embed.addFields({ name: '⏱️ Duration', value: String(duration), inline: true });
+      embed.addFields(field('expiry', 'Duration', String(duration), true));
     }
 
     return embed;
+  }
+
+  static accessGrant(options) {
+    const opts = options || {};
+    const target = opts.target;
+    const moderator = opts.moderator;
+    const targetId = target && target.id ? String(target.id) : 'Unknown';
+    const expiry = opts.expiry instanceof Date
+      ? formatStamp(opts.expiry)
+      : (opts.expiry || 'Never');
+    const timestamp = opts.timestamp instanceof Date
+      ? formatStamp(opts.timestamp)
+      : (opts.timestamp || formatStamp(new Date()));
+
+    return this.base({
+      color: (config.theme && config.theme.color) || config.colors.dark,
+      author: opts.author,
+      authorName: opts.authorName || config.botName,
+      authorIcon: opts.authorIcon,
+      thumbnail: opts.thumbnail,
+      description: [
+        section('Added Global No Prefix:'),
+        line('user', 'User', userTag(target)),
+        line('mention', 'User Mention', targetId === 'Unknown' ? 'Unknown' : '<@' + targetId + '>'),
+        line('id', 'User ID', targetId),
+        '',
+        section('Additional Info:'),
+        line('added_by', 'Added By', userTag(moderator)),
+        line('expiry', 'Expiry Time', expiry),
+        line('timestamp', 'Timestamp', timestamp),
+        '',
+        '*' + (opts.note || 'DM will be sent to the user in case No Prefix is expired.') + '*'
+      ].join('\n')
+    });
   }
 
   static antinukeOverview(guild, settings) {
@@ -95,71 +205,69 @@ class ZyronEmbedBuilder {
     const active = settings.antiNukeEnabled;
 
     function mark(value) {
-      return value ? '🟢 **ON**' : '🔴 **OFF**';
+      return status(value);
     }
 
     const coreActions = [
-      (features.antiBan ? '🟢 ' : '🔴 ') + '**Anti Ban**',
-      (features.antiKick ? '🟢 ' : '🔴 ') + '**Anti Kick**',
-      (features.antiBotAdd ? '🟢 ' : '🔴 ') + '**Anti Bot Add**',
-      (features.antiChannelCreate ? '🟢 ' : '🔴 ') + '**Anti Channel Create**',
-      (features.antiChannelDelete ? '🟢 ' : '🔴 ') + '**Anti Channel Delete**',
-      (features.antiChannelUpdate ? '🟢 ' : '🔴 ') + '**Anti Channel Update**',
-      (features.antiRoleCreate ? '🟢 ' : '🔴 ') + '**Anti Role Create**',
-      (features.antiRoleDelete ? '🟢 ' : '🔴 ') + '**Anti Role Delete**',
-      (features.antiRoleUpdate ? '🟢 ' : '🔴 ') + '**Anti Role Update**',
-      (features.antiWebhook ? '🟢 ' : '🔴 ') + '**Anti Webhook**'
+      (features.antiBan ? emoji('success') : emoji('error')) + ' **Anti Ban**',
+      (features.antiKick ? emoji('success') : emoji('error')) + ' **Anti Kick**',
+      (features.antiBotAdd ? emoji('success') : emoji('error')) + ' **Anti Bot Add**',
+      (features.antiChannelCreate ? emoji('success') : emoji('error')) + ' **Anti Channel Create**',
+      (features.antiChannelDelete ? emoji('success') : emoji('error')) + ' **Anti Channel Delete**',
+      (features.antiChannelUpdate ? emoji('success') : emoji('error')) + ' **Anti Channel Update**',
+      (features.antiRoleCreate ? emoji('success') : emoji('error')) + ' **Anti Role Create**',
+      (features.antiRoleDelete ? emoji('success') : emoji('error')) + ' **Anti Role Delete**',
+      (features.antiRoleUpdate ? emoji('success') : emoji('error')) + ' **Anti Role Update**',
+      (features.antiWebhook ? emoji('success') : emoji('error')) + ' **Anti Webhook**'
     ].join('\n');
 
     const advancedActions = [
-      (features.antiEveryone ? '🟢 ' : '🔴 ') + '**Anti @everyone / @here**',
-      (features.antiGuildUpdate ? '🟢 ' : '🔴 ') + '**Anti Guild Update**',
-      (features.antiIntegration ? '🟢 ' : '🔴 ') + '**Anti Integration**',
-      (features.antiMemberUpdate ? '🟢 ' : '🔴 ') + '**Anti Member Update**',
-      (features.antiPrune ? '🟢 ' : '🔴 ') + '**Anti Prune**',
-      (features.antiDangerousPermissionUpdate ? '🟢 ' : '🔴 ') + '**Anti Dangerous Permission Update**',
-      (features.antiSpam ? '🟢 ' : '🔴 ') + '**Anti Spam**',
-      (features.antiLink ? '🟢 ' : '🔴 ') + '**Anti Link**',
-      (features.antiChannelRecovery ? '🟢 ' : '🔴 ') + '**Anti Channel Recovery**',
-      (features.antiBetrayal ? '🟢 ' : '🔴 ') + '**Anti Betrayal**',
-      (features.antiAbuse ? '🟢 ' : '🔴 ') + '**Anti Abuse (EN + HI)**',
-      (features.antiRaid ? '🟢 ' : '🔴 ') + '**Anti Raid**',
-      (features.autoLockdown ? '🟢 ' : '🔴 ') + '**Auto Lockdown**',
-      (features.autoMod ? '🟢 ' : '🔴 ') + '**AutoMod Integration**'
+      (features.antiEveryone ? emoji('success') : emoji('error')) + ' **Anti @everyone / @here**',
+      (features.antiGuildUpdate ? emoji('success') : emoji('error')) + ' **Anti Guild Update**',
+      (features.antiIntegration ? emoji('success') : emoji('error')) + ' **Anti Integration**',
+      (features.antiMemberUpdate ? emoji('success') : emoji('error')) + ' **Anti Member Update**',
+      (features.antiPrune ? emoji('success') : emoji('error')) + ' **Anti Prune**',
+      (features.antiDangerousPermissionUpdate ? emoji('success') : emoji('error')) + ' **Anti Dangerous Permission Update**',
+      (features.antiSpam ? emoji('success') : emoji('error')) + ' **Anti Spam**',
+      (features.antiLink ? emoji('success') : emoji('error')) + ' **Anti Link**',
+      (features.antiChannelRecovery ? emoji('success') : emoji('error')) + ' **Anti Channel Recovery**',
+      (features.antiBetrayal ? emoji('success') : emoji('error')) + ' **Anti Betrayal**',
+      (features.antiAbuse ? emoji('success') : emoji('error')) + ' **Anti Abuse (EN + HI)**',
+      (features.antiRaid ? emoji('success') : emoji('error')) + ' **Anti Raid**',
+      (features.autoLockdown ? emoji('success') : emoji('error')) + ' **Auto Lockdown**',
+      (features.autoMod ? emoji('success') : emoji('error')) + ' **AutoMod Integration**'
     ].join('\n');
 
     const whitelistCount = settings.whitelist ? settings.whitelist.length : 0;
     const ownerCount = settings.extraOwners ? settings.extraOwners.length : 0;
     const logChannel = settings.logChannel ? '<#' + settings.logChannel + '>' : '*Not set*';
 
-    const embed = new EmbedBuilder()
-      .setColor(active ? '#2B2D31' : config.colors.danger)
+    return new EmbedBuilder()
+      .setColor(active ? ((config.theme && config.theme.color) || config.colors.dark) : config.colors.danger)
       .setAuthor({
         name: config.botName + ' Security Control Panel — ' + guild.name,
         iconURL: guild.iconURL() || undefined
       })
-      .setTitle('🛡️ Anti-Nuke Dashboard & Protection Matrix')
+      .setTitle(emoji('shield') + ' Anti-Nuke Dashboard & Protection Matrix')
       .setDescription(
-        '**STATUS**\n' + (active ? '🟢 Active' : '🔴 Disabled') + '\n\n' +
-        '**BLAST RADIUS**\n' + (active ? '🟢 Blocked via event guards' : '🔴 Unprotected') + '\n\n' +
-        '**TRUSTED BYPASS**\n' + whitelistCount + ' whitelist entries\n\n' +
-        '**ATTACK RESPONSE**\n' + (active ? '🟢 Action + Logging' : '🔴 None') + '\n\n' +
-        '**Punishment:** **' + punishment + '**\n' +
-        '**Extra Owners:** **' + ownerCount + '**\n' +
-        '**Log Channel:** ' + logChannel + '\n\n' +
-        '⚠️ Keep the ' + config.botName + ' role above every other role.'
+        section('STATUS') + '\n' + (active ? emoji('success') + ' Active' : emoji('error') + ' Disabled') + '\n\n' +
+        section('BLAST RADIUS') + '\n' + (active ? emoji('success') + ' Blocked via event guards' : emoji('error') + ' Unprotected') + '\n\n' +
+        section('TRUSTED BYPASS') + '\n' + emoji('user') + ' ' + whitelistCount + ' whitelist entries\n\n' +
+        section('ATTACK RESPONSE') + '\n' + (active ? emoji('success') + ' Action + Logging' : emoji('error') + ' None') + '\n\n' +
+        emoji('ban') + ' **Punishment:** **' + punishment + '**\n' +
+        emoji('crown') + ' **Extra Owners:** **' + ownerCount + '**\n' +
+        emoji('settings') + ' **Log Channel:** ' + logChannel + '\n\n' +
+        emoji('warning') + ' Keep the ' + config.botName + ' role above every other role.'
       )
       .addFields(
-        { name: '⚙️ Core Actions', value: coreActions, inline: true },
-        { name: '⚡ Advanced / Sensitive', value: advancedActions, inline: true }
+        field('settings', 'Core Actions', coreActions, true),
+        field('lightning', 'Advanced / Sensitive', advancedActions, true)
       )
       .setFooter({
-        text: config.botName + ' • Powered by ' + config.company + ' | ' + config.inviteUrl,
+        text: (config.theme && config.theme.footer ? config.theme.footer : config.botName + ' • Powered by ' + config.company) + ' | ' + config.inviteUrl,
         iconURL: guild.client && guild.client.user ? guild.client.user.displayAvatarURL() : undefined
       })
       .setTimestamp();
-
-    return embed;
   }
 
   static antinukeAlert(data) {
@@ -170,50 +278,36 @@ class ZyronEmbedBuilder {
     const severity = info.severity ? String(info.severity).toUpperCase() : 'SEVERE';
     const isMinor = severity === 'MINOR';
 
-    const embed = new EmbedBuilder()
-      .setColor(isMinor ? config.colors.warning : config.colors.danger)
-      .setAuthor({
+    const embed = this.base({
+      color: isMinor ? config.colors.warning : config.colors.danger,
+      author: {
         name: config.botName + ' Security Core',
-        iconURL: guild && guild.client && guild.client.user ? guild.client.user.displayAvatarURL() : undefined
-      })
-      .setTitle((isMinor ? '⚠️ SECURITY WARNING — ' : '🚨 SECURITY INCIDENT — ') + String(info.action || 'Unknown Event').toUpperCase())
-      .setDescription(
-        isMinor
-          ? 'A minor infraction was detected and handled by **' + config.botName + ' Anti-Nuke**.'
-          : 'An unauthorized destructive event was detected and neutralised by **' + config.botName + ' Anti-Nuke**.'
-      )
-      .addFields(
-        { name: '🛡️ Guild', value: guild ? guild.name + ' (' + guild.id + ')' : 'Unknown', inline: false },
-        { name: '👤 Offender', value: executor ? userTag(executor) + ' (' + executorId + ')' : 'Unknown (' + executorId + ')', inline: true },
-        { name: '🔨 Action Taken', value: String(info.actionTaken || 'None'), inline: true },
-        { name: '🎯 Target', value: String(info.target || 'N/A'), inline: false },
-        { name: '📜 Details', value: String(info.reason || 'Destructive action blocked or reversed.'), inline: false }
-      )
-      .setFooter({
-        text: config.botName + ' • Powered by ' + config.company,
-        iconURL: guild && guild.client && guild.client.user ? guild.client.user.displayAvatarURL() : undefined
-      })
-      .setTimestamp();
+        iconURL: guild && guild.client && guild.client.user
+          ? guild.client.user.displayAvatarURL()
+          : undefined
+      },
+      title: emoji(isMinor ? 'warning' : 'error') + ' ' +
+        (isMinor ? 'SECURITY WARNING — ' : 'SECURITY INCIDENT — ') +
+        String(info.action || 'Unknown Event').toUpperCase(),
+      description: isMinor
+        ? 'A minor infraction was detected and handled by **' + config.botName + ' Anti-Nuke**.'
+        : 'An unauthorized destructive event was detected and neutralised by **' + config.botName + ' Anti-Nuke**.',
+      fields: [
+        field('shield', 'Guild', guild ? guild.name + ' (' + guild.id + ')' : 'Unknown', false),
+        field('user', 'Offender', executor ? userTag(executor) + ' (' + executorId + ')' : 'Unknown (' + executorId + ')', true),
+        field('ban', 'Action Taken', String(info.actionTaken || 'None'), true),
+        field('spark', 'Target', String(info.target || 'N/A'), false),
+        field('info', 'Details', String(info.reason || 'Destructive action blocked or reversed.'), false)
+      ]
+    });
 
     if (info.ai) {
       const ai = info.ai;
       const confidence = Math.round((ai.confidence || 0) * 100);
       embed.addFields(
-        {
-          name: '🧠 AI Verdict',
-          value: String(ai.verdict || 'uncertain').toUpperCase() + ' (' + confidence + '%)',
-          inline: true
-        },
-        {
-          name: '🤖 AI Model',
-          value: String(ai.model || 'deterministic-rules'),
-          inline: true
-        },
-        {
-          name: '💬 AI Reason',
-          value: String(ai.reason || 'No AI reason provided.'),
-          inline: false
-        }
+        field('bot', 'AI Verdict', String(ai.verdict || 'uncertain').toUpperCase() + ' (' + confidence + '%)', true),
+        field('settings', 'AI Model', String(ai.model || 'deterministic-rules'), true),
+        field('info', 'AI Reason', String(ai.reason || 'No AI reason provided.'), false)
       );
     }
 

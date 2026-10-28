@@ -1,0 +1,121 @@
+<%
+  var tab = typeof activeTab !== 'undefined' ? activeTab : 'overview';
+  var item = function (key) { return 'nav-item server-nav-link' + (tab === key ? ' active' : ''); };
+  var featureCount = settings && settings.features ? Object.keys(settings.features).filter(function (key) { return settings.features[key]; }).length : 0;
+%>
+<aside class="sidebar server-sidebar">
+  <a class="brand" href="/dashboard">
+    <span class="brand-mark"><%- include('icon', { name: 'shield', size: 22 }) %></span>
+    <span class="brand-text">
+      <strong>Zyron</strong>
+      <small>Control Center</small>
+    </span>
+  </a>
+
+  <a class="sidebar-back" href="/dashboard">
+    <span class="nav-icon"><%- include('icon', { name: 'arrow-left', size: 16 }) %></span>
+    <span>All servers</span>
+  </a>
+
+  <div class="server-identity">
+    <span class="server-avatar">
+      <% if (serverIcon) { %>
+        <img src="<%= serverIcon %>" alt="">
+      <% } else { %>
+        <%- include('icon', { name: 'server', size: 22 }) %>
+      <% } %>
+    </span>
+    <span class="server-identity-copy">
+      <small>Managing server</small>
+      <strong title="<%= serverName %>"><%= serverName %></strong>
+    </span>
+    <span class="status-dot" title="Bot connected"></span>
+  </div>
+
+  <nav class="nav server-nav">
+    <span class="nav-label">Workspace</span>
+    <a class="<%= item('overview') %>" href="#overview" data-panel="overview">
+      <span class="nav-icon"><%- include('icon', { name: 'grid', size: 18 }) %></span>
+      <span>Overview</span>
+    </a>
+
+    <span class="nav-label">Protection</span>
+    <a class="<%= item('antinuke') %>" href="#antinuke" data-panel="antinuke">
+      <span class="nav-icon"><%- include('icon', { name: 'shield-check', size: 18 }) %></span>
+      <span>Anti-Nuke</span>
+      <span class="nav-pill"><%= featureCount %></span>
+    </a>
+    <a class="<%= item('antiraid') %>" href="#antiraid" data-panel="antiraid">
+      <span class="nav-icon"><%- include('icon', { name: 'zap', size: 18 }) %></span>
+      <span>Anti-Raid</span>
+    </a>
+    <a class="<%= item('ai') %>" href="#ai" data-panel="ai">
+      <span class="nav-icon"><%- include('icon', { name: 'brain', size: 18 }) %></span>
+      <span>AI Guard</span>
+    </a>
+    <a class="<%= item('automod') %>" href="#automod" data-panel="automod">
+      <span class="nav-icon"><%- include('icon', { name: 'message-square', size: 18 }) %></span>
+      <span>AutoMod</span>
+    </a>
+
+    <span class="nav-label">Community</span>
+    <a class="<%= item('tickets') %>" href="#tickets" data-panel="tickets">
+      <span class="nav-icon"><%- include('icon', { name: 'ticket', size: 18 }) %></span>
+      <span>Tickets</span>
+      <% if (settings.ticketPanelChannel) { %><span class="status-dot tiny"></span><% } %>
+    </a>
+    <a class="<%= item('staff') %>" href="#staff" data-panel="staff">
+      <span class="nav-icon"><%- include('icon', { name: 'user-check', size: 18 }) %></span>
+      <span>Staff Apps</span>
+      <% if (settings.applicationChannel) { %><span class="status-dot tiny"></span><% } %>
+    </a>
+    <a class="<%= item('appeals') %>" href="#appeals" data-panel="appeals">
+      <span class="nav-icon"><%- include('icon', { name: 'alert-triangle', size: 18 }) %></span>
+      <span>Appeals</span>
+      <% if (activity && activity.appealStats && activity.appealStats.pending > 0) { %><span class="nav-pill"><%= activity.appealStats.pending %></span><% } %>
+    </a>
+    <a class="<%= item('giveaways') %>" href="#giveaways" data-panel="giveaways">
+      <span class="nav-icon"><%- include('icon', { name: 'gift', size: 18 }) %></span>
+      <span>Giveaways</span>
+    </a>
+    <a class="<%= item('economy') %>" href="#economy" data-panel="economy">
+      <span class="nav-icon"><%- include('icon', { name: 'coins', size: 18 }) %></span>
+      <span>Economy</span>
+    </a>
+
+    <span class="nav-label">Configure</span>
+    <a class="<%= item('settings') %>" href="#settings" data-panel="settings">
+      <span class="nav-icon"><%- include('icon', { name: 'sliders', size: 18 }) %></span>
+      <span>Server settings</span>
+    </a>
+    <% if (user && user.isMainAdmin) { %>
+      <a class="nav-item" href="/admin">
+        <span class="nav-icon"><%- include('icon', { name: 'crown', size: 18 }) %></span>
+        <span>Main admin</span>
+        <span class="nav-pill">Owner</span>
+      </a>
+    <% } %>
+  </nav>
+
+  <div class="sidebar-spacer"></div>
+
+  <a class="sidebar-help" href="<%= brand.invite %>" target="_blank" rel="noopener">
+    <span class="tip-icon"><%- include('icon', { name: 'book', size: 16 }) %></span>
+    <span>
+      <strong>Need a hand?</strong>
+      <small>Open the support server</small>
+    </span>
+    <%- include('icon', { name: 'external-link', size: 13 }) %>
+  </a>
+
+  <% if (user) { %>
+    <div class="sidebar-user">
+      <span class="avatar"><img src="<%= user.avatarUrl %>" alt=""></span>
+      <span class="sidebar-user-copy">
+        <strong><%= user.displayName %></strong>
+        <small><%= user.isMainAdmin ? 'Main administrator' : 'Server manager' %></small>
+      </span>
+      <a class="icon-btn ghost" href="/logout" title="Sign out"><%- include('icon', { name: 'log-out', size: 16 }) %></a>
+    </div>
+  <% } %>
+</aside>

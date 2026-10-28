@@ -10,32 +10,67 @@ const {
 } = require('discord.js');
 const db = require('../database/db');
 const config = require('../../config.json');
+const theme = require('../utils/theme');
 
-function panelEmbed() {
+const DEFAULT_PANEL_TITLE = '📝 ' + config.botName + ' Staff Applications';
+const DEFAULT_PANEL_DESCRIPTION =
+  'Want to join the staff team?\n\n' +
+  'Click **Apply Now** and fill in the application form.\n' +
+  'Our management team will review it and reply by DM.\n\n' +
+  '**Requirements**\n' +
+  '• Be active in the server\n' +
+  '• Be respectful and mature\n' +
+  '• No recent punishments';
+const DEFAULT_PANEL_FOOTER = config.botName + ' • Powered by ' + config.company;
+const DEFAULT_QUESTIONS = [
+  { label: 'Name / nickname', placeholder: 'Your name or nickname', style: 'short', required: true, maxLength: 50 },
+  { label: 'Age', placeholder: 'Your age', style: 'short', required: true, maxLength: 3 },
+  { label: 'Timezone / country', placeholder: 'e.g. GMT+5 / India', style: 'short', required: true, maxLength: 60 },
+  { label: 'Previous staff experience', placeholder: 'Servers, roles and responsibilities', style: 'paragraph', required: true, maxLength: 500 },
+  { label: 'Why should we pick you?', placeholder: 'Tell us about yourself', style: 'paragraph', required: true, maxLength: 800 }
+];
+
+function getQuestions(settings) {
+  const source = Array.isArray(settings.staffApplyQuestions) && settings.staffApplyQuestions.length > 0
+    ? settings.staffApplyQuestions
+    : DEFAULT_QUESTIONS;
+
+  return source.slice(0, 5).map(function (question, index) {
+    const style = question.style === 'paragraph' ? 'paragraph' : 'short';
+    let maxLength = parseInt(question.maxLength, 10);
+    if (isNaN(maxLength)) maxLength = style === 'paragraph' ? 500 : 100;
+    return {
+      label: String(question.label || ('Question ' + (index + 1))).slice(0, 45),
+      placeholder: String(question.placeholder || '').slice(0, 100),
+      style: style,
+      required: question.required !== false,
+      maxLength: Math.max(1, Math.min(1000, maxLength))
+    };
+  });
+}
+
+function panelEmbed(settings) {
   return new EmbedBuilder()
     .setColor(config.colors.primary)
-    .setTitle('📝 ' + config.botName + ' Staff Applications')
-    .setDescription(
-      'Want to join the staff team?\n\n' +
-      'Click **Apply Now** and fill in the application form.\n' +
-      'Our management team will review it and reply by DM.\n\n' +
-      '**Requirements**\n' +
-      '• Be active in the server\n' +
-      '• Be respectful and mature\n' +
-      '• No recent punishments'
-    )
-    .setFooter({ text: config.botName + ' • Powered by ' + config.company })
+    .setTitle(settings.staffApplyPanelTitle || DEFAULT_PANEL_TITLE)
+    .setDescription((settings.staffApplyPanelDescription || DEFAULT_PANEL_DESCRIPTION).slice(0, 4096))
+    .setFooter({ text: (settings.staffApplyPanelFooter || DEFAULT_PANEL_FOOTER).slice(0, 2048) })
     .setTimestamp();
 }
 
-function panelRow() {
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('staff-apply:open')
-      .setLabel('Apply Now')
-      .setEmoji('📝')
-      .setStyle(ButtonStyle.Success)
-  );
+function panelRow(settings) {
+  const button = new ButtonBuilder()
+    .setCustomId('staff-apply:open')
+    .setLabel(String(settings.staffApplyButtonLabel || 'Apply Now').slice(0, 80))
+    .setStyle(ButtonStyle.Success);
+
+  try {
+    button.setEmoji(settings.staffApplyButtonEmoji || '📝');
+  } catch (err) {
+    button.setEmoji('📝');
+  }
+
+  return new ActionRowBuilder().addComponents(button);
 }
 
 module.exports = {
@@ -67,7 +102,7 @@ module.exports = {
     }
 
     if (sub === 'panel' || sub === '') {
-      await message.channel.send({ embeds: [panelEmbed()], components: [panelRow()] });
+      await message.channel.send({ embeds: [panelEmbed(settings)], components: [panelRow(settings)] });
       if (message.deletable) message.delete().catch(function () {});
       return;
     }
@@ -87,58 +122,30 @@ module.exports = {
     const action = parts[1];
 
     if (action === 'open') {
+      const settings = db.getGuild(interaction.guild.id);
+      const questions = getQuestions(settings);
       const modal = new ModalBuilder()
         .setCustomId('staff-apply:submit')
-        .setTitle('Staff Application');
+        .setTitle(String(settings.staffApplyModalTitle || 'Staff Application').slice(0, 45));
 
-      const nameInput = new TextInputBuilder()
-        .setCustomId('name')
-        .setLabel('Name / nickname')
-        .setStyle(TextInputStyle.Short)
-        .setMaxLength(50)
-        .setRequired(true);
+      questions.forEach(function (question, index) {
+        const input = new TextInputBuilder()
+          .setCustomId('q' + index)
+          .setLabel(question.label)
+          .setStyle(question.style === 'paragraph' ? TextInputStyle.Paragraph : TextInputStyle.Short)
+          .setMaxLength(question.maxLength)
+          .setRequired(question.required);
 
-      const ageInput = new TextInputBuilder()
-        .setCustomId('age')
-        .setLabel('Age')
-        .setStyle(TextInputStyle.Short)
-        .setMaxLength(3)
-        .setRequired(true);
-
-      const timezoneInput = new TextInputBuilder()
-        .setCustomId('timezone')
-        .setLabel('Timezone / country')
-        .setStyle(TextInputStyle.Short)
-        .setMaxLength(60)
-        .setRequired(true);
-
-      const experienceInput = new TextInputBuilder()
-        .setCustomId('experience')
-        .setLabel('Previous staff experience')
-        .setStyle(TextInputStyle.Paragraph)
-        .setMaxLength(500)
-        .setRequired(true);
-
-      const whyInput = new TextInputBuilder()
-        .setCustomId('why')
-        .setLabel('Why should we pick you?')
-        .setStyle(TextInputStyle.Paragraph)
-        .setMaxLength(800)
-        .setRequired(true);
-
-      modal.addComponents(
-        new ActionRowBuilder().addComponents(nameInput),
-        new ActionRowBuilder().addComponents(ageInput),
-        new ActionRowBuilder().addComponents(timezoneInput),
-        new ActionRowBuilder().addComponents(experienceInput),
-        new ActionRowBuilder().addComponents(whyInput)
-      );
+        if (question.placeholder) input.setPlaceholder(question.placeholder);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+      });
 
       return interaction.showModal(modal);
     }
 
     if (action === 'submit') {
       const settings = db.getGuild(interaction.guild.id);
+      const questions = getQuestions(settings);
       const channel = settings.applicationChannel
         ? interaction.guild.channels.cache.get(settings.applicationChannel)
         : interaction.channel;
@@ -147,11 +154,27 @@ module.exports = {
         return interaction.reply({ content: 'The applications channel is not configured. Ask an admin to run .staff-apply setup #channel', ephemeral: true });
       }
 
-      const name = interaction.fields.getTextInputValue('name');
-      const age = interaction.fields.getTextInputValue('age');
-      const timezone = interaction.fields.getTextInputValue('timezone');
-      const experience = interaction.fields.getTextInputValue('experience');
-      const why = interaction.fields.getTextInputValue('why');
+      const fields = [
+        {
+          name: '👤 User',
+          value: '<@' + interaction.user.id + '>\n' + interaction.user.tag,
+          inline: true
+        }
+      ];
+
+      questions.forEach(function (question, index) {
+        let value = '';
+        try {
+          value = interaction.fields.getTextInputValue('q' + index);
+        } catch (err) {
+          value = '';
+        }
+        fields.push({
+          name: question.label.slice(0, 256),
+          value: String(value || '—').slice(0, 1024),
+          inline: false
+        });
+      });
 
       const embed = new EmbedBuilder()
         .setColor(config.colors.primary)
@@ -161,14 +184,7 @@ module.exports = {
         })
         .setThumbnail(interaction.user.displayAvatarURL())
         .setTitle('📝 New Staff Application')
-        .addFields(
-          { name: '👤 User', value: '<@' + interaction.user.id + '>\n' + interaction.user.tag, inline: true },
-          { name: '🎂 Age', value: age, inline: true },
-          { name: '🌍 Timezone', value: timezone, inline: true },
-          { name: '🧠 Name', value: name, inline: false },
-          { name: '📚 Experience', value: experience, inline: false },
-          { name: '💬 Why them?', value: why, inline: false }
-        )
+        .addFields(fields)
         .setFooter({ text: config.botName + ' • Powered by ' + config.company })
         .setTimestamp();
 
@@ -185,7 +201,17 @@ module.exports = {
           .setStyle(ButtonStyle.Danger)
       );
 
-      await channel.send({ content: '<@' + interaction.user.id + '>', embeds: [embed], components: [row] });
+      const applicationMessage = await channel.send({
+        content: '<@' + interaction.user.id + '>',
+        embeds: [embed],
+        components: [row]
+      });
+
+      db.addStaffApplication(interaction.guild.id, {
+        userId: interaction.user.id,
+        channelId: channel.id,
+        messageId: applicationMessage.id
+      });
 
       return interaction.reply({ content: 'Your staff application was submitted. You will receive a DM with the result.', ephemeral: true });
     }
@@ -197,31 +223,69 @@ module.exports = {
 
       const userId = parts[2];
       const accepted = action === 'accept';
+      const settings = db.getGuild(interaction.guild.id);
 
       await interaction.update({ components: [] });
+
+      const acceptedRoles = [];
+      if (settings.staffApplyAcceptRole) acceptedRoles.push(settings.staffApplyAcceptRole);
+      (Array.isArray(settings.staffApplyAcceptRoles) ? settings.staffApplyAcceptRoles : []).forEach(function (roleId) {
+        if (roleId && acceptedRoles.indexOf(roleId) === -1) acceptedRoles.push(roleId);
+      });
+
+      if (accepted && acceptedRoles.length > 0) {
+        const member = await interaction.guild.members.fetch(userId).catch(function () {
+          return null;
+        });
+
+        for (let i = 0; i < acceptedRoles.length; i++) {
+          const role = interaction.guild.roles.cache.get(acceptedRoles[i]) ||
+            await interaction.guild.roles.fetch(acceptedRoles[i]).catch(function () {
+              return null;
+            });
+
+          if (member && role) {
+            await member.roles.add(role, 'Staff application accepted').catch(function (err) {
+              console.error('Staff accept role error:', err.message);
+            });
+          }
+        }
+      }
+
+      db.updateStaffApplication(interaction.guild.id, userId, {
+        status: accepted ? 'accepted' : 'denied',
+        decision: accepted ? 'accepted' : 'denied',
+        reviewedBy: interaction.user.id,
+        reviewedAt: Date.now(),
+        messageId: interaction.message ? interaction.message.id : null
+      });
 
       const user = await client.users.fetch(userId).catch(function () {
         return null;
       });
 
       if (user) {
+        const defaultText = accepted
+          ? 'Congratulations! Your staff application in **{server}** was accepted. A manager will contact you soon.'
+          : 'Unfortunately your staff application in **{server}** was denied. You can apply again later.';
+        const template = accepted
+          ? (settings.staffApplyAcceptMessage || defaultText)
+          : (settings.staffApplyDenyMessage || defaultText);
+        const message = String(template).split('{server}').join(interaction.guild.name);
+
         user.send({
           embeds: [
             new EmbedBuilder()
               .setColor(accepted ? config.colors.success : config.colors.danger)
               .setTitle(accepted ? '✅ Staff Application Accepted' : '❌ Staff Application Denied')
-              .setDescription(
-                accepted
-                  ? 'Congratulations! Your staff application in **' + interaction.guild.name + '** was accepted. A manager will contact you soon.'
-                  : 'Unfortunately your staff application in **' + interaction.guild.name + '** was denied. You can apply again later.'
-              )
+              .setDescription(message.slice(0, 4096))
               .setFooter({ text: config.botName + ' • Powered by ' + config.company })
           ]
         }).catch(function () {});
       }
 
       return interaction.followUp({
-        content: (accepted ? '✅ Application accepted' : '❌ Application denied') + ' by ' + interaction.user.tag + '.'
+        content: (accepted ? theme.emoji('success') + ' Application accepted' : theme.emoji('error') + ' Application denied') + ' by ' + interaction.user.tag + '.'
       });
     }
   }

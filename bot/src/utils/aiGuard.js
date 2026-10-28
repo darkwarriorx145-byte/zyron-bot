@@ -639,6 +639,120 @@ async function classifyMessage(event) {
   return final;
 }
 
+async function callChatOnce(model, system, user) {
+  const controller = new AbortController();
+  const timer = setTimeout(function () {
+    controller.abort();
+  }, getTimeout());
+  const started = Date.now();
+
+  try {
+    const payload = {
+      model: model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user }
+      ],
+      temperature: 0.35,
+      max_tokens: 700
+    };
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      signal: controller.signal,
+      headers: {
+        'Authorization': 'Bearer ' + envValue('OPENROUTER_API_KEY', ''),
+        'Content-Type': 'application/json',
+        'HTTP-Referer': envValue('OPENROUTER_SITE_URL', 'https://zyranodes.com'),
+        'X-Title': envValue('OPENROUTER_APP_NAME', 'Zyron')
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const text = await response.text();
+    let data = null;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      data = null;
+    }
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        status: response.status,
+        error: data && data.error && data.error.message ? data.error.message : 'AI request failed.',
+        model: model,
+        latency: Date.now() - started
+      };
+    }
+
+    const content = data && data.choices && data.choices[0] && data.choices[0].message
+      ? data.choices[0].message.content
+      : '';
+    if (!content) {
+      return {
+        ok: false,
+        status: response.status,
+        error: 'The AI returned an empty reply.',
+        model: model,
+        latency: Date.now() - started
+      };
+    }
+
+    return {
+      ok: true,
+      text: String(content).trim().slice(0, 1800),
+      model: model,
+      latency: Date.now() - started
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      status: 0,
+      error: err.name === 'AbortError' ? 'AI timed out.' : err.message,
+      model: model,
+      latency: Date.now() - started
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function chat(settings, system, user) {
+  if (!isConfigured()) {
+    return {
+      ok: false,
+      error: 'AI is not configured.',
+      model: null,
+      latency: 0
+    };
+  }
+
+  const models = [];
+  [getModel(settings), getFallbackModel(), getFallbackModel2()].forEach(function (model) {
+    const value = String(model || '').trim();
+    if (value && models.indexOf(value) === -1) models.push(value);
+  });
+
+  let last = null;
+  for (let i = 0; i < models.length; i++) {
+    const model = models[i];
+    const result = await enqueue(function () {
+      return callChatOnce(model, system, user);
+    });
+    if (result && result.ok) return result;
+    last = result;
+  }
+
+  return last || {
+    ok: false,
+    error: 'No AI model is available.',
+    model: null,
+    latency: 0
+  };
+}
+
 module.exports = {
   isConfigured: isConfigured,
   isEnabled: isEnabled,
@@ -650,5 +764,6 @@ module.exports = {
   confirmDestructive: confirmDestructive,
   confirmRaid: confirmRaid,
   classifyMessage: classifyMessage,
+  chat: chat,
   clearCache: clearCache
 };

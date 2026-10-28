@@ -499,7 +499,7 @@ async function startLockdown(client, guild, settings, reason) {
 
   const embed = ZyronEmbedBuilder.base({
     color: config.colors.danger,
-    title: '🚨 AUTO LOCKDOWN ACTIVATED',
+    title: ZyronEmbedBuilder.emoji('warning') + ' AUTO LOCKDOWN ACTIVATED',
     description:
       '**' + guild.name + '** was locked down automatically.\n\n' +
       '**Reason:** ' + reason + '\n' +
@@ -515,10 +515,12 @@ async function startLockdown(client, guild, settings, reason) {
 function lockdownEmbed(guild, state) {
   return ZyronEmbedBuilder.base({
     color: config.colors.danger,
-    title: '🔒 Server Lockdown Status',
+    title: ZyronEmbedBuilder.emoji('lock') + ' Server Lockdown Status',
     description:
       '**Server:** ' + guild.name + '\n' +
-      '**Status:** ' + (state && state.active ? '🔴 LOCKED' : '🟢 OPEN') + '\n' +
+      '**Status:** ' + (state && state.active
+        ? ZyronEmbedBuilder.emoji('error') + ' LOCKED'
+        : ZyronEmbedBuilder.emoji('success') + ' OPEN') + '\n' +
       '**Reason:** ' + (state && state.reason ? state.reason : 'No active lockdown') + '\n' +
       '**Locked Channels:** ' + (state && state.count ? state.count : 0) + '\n' +
       '**Since:** ' + (state && state.lockedAt ? '<t:' + Math.floor(state.lockedAt / 1000) + ':F>' : 'N/A')

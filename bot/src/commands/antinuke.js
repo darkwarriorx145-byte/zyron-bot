@@ -161,7 +161,7 @@ module.exports = {
       return message.channel.send({
         embeds: [
           ZyronEmbedBuilder.base({
-            title: '🛡️ Anti-Nuke & Security Help',
+            title: ZyronEmbedBuilder.emoji('shield') + ' Anti-Nuke & Security Help',
             description: 'Manage ' + config.botName + ' Anti-Nuke and protect your server from every destructive action.',
             fields: fields
           })
@@ -217,7 +217,7 @@ module.exports = {
       return message.channel.send({
         embeds: [
           ZyronEmbedBuilder.base({
-            title: '📋 Whitelisted Users (' + settings.whitelist.length + ')',
+            title: ZyronEmbedBuilder.emoji('info') + ' Whitelisted Users (' + settings.whitelist.length + ')',
             description: lines.join('\n')
           })
         ]
@@ -226,13 +226,15 @@ module.exports = {
 
     if (sub === 'features') {
       const lines = FEATURES.map(function (feature) {
-        const state = settings.features[feature.key] ? '🟢 ON' : '🔴 OFF';
+        const state = settings.features[feature.key]
+          ? ZyronEmbedBuilder.emoji('success') + ' ON'
+          : ZyronEmbedBuilder.emoji('error') + ' OFF';
         return state + ' — **' + feature.label + '** (key: **' + feature.key + '**)';
       });
       return message.channel.send({
         embeds: [
           ZyronEmbedBuilder.base({
-            title: '⚙️ Anti-Nuke Features',
+            title: ZyronEmbedBuilder.emoji('settings') + ' Anti-Nuke Features',
             description: lines.join('\n') + '\n\nToggle with: ' + prefix + 'antinuke toggle <feature>'
           })
         ]
@@ -256,7 +258,7 @@ module.exports = {
       const next = !settings.features[feature.key];
       db.setFeature(guildId, feature.key, next);
       return message.reply({
-        embeds: [ZyronEmbedBuilder.success('Feature Updated', feature.label + ' is now ' + (next ? '🟢 ON' : '🔴 OFF') + '.')]
+        embeds: [ZyronEmbedBuilder.success('Feature Updated', feature.label + ' is now ' + (next ? ZyronEmbedBuilder.emoji('success') + ' ON' : ZyronEmbedBuilder.emoji('error') + ' OFF') + '.')]
       });
     }
 

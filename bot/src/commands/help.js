@@ -6,6 +6,7 @@ const {
   ComponentType
 } = require('discord.js');
 const config = require('../../config.json');
+const ZyronEmbedBuilder = require('../utils/embedBuilder');
 
 const MENU_ID = 'zyron_help_menu';
 const MENU_TIMEOUT = 180000;
@@ -14,7 +15,7 @@ const CATEGORIES = [
   {
     value: 'moderation',
     label: 'Moderation',
-    emoji: '🛡️',
+    emoji: ZyronEmbedBuilder.emoji('shield'),
     description: 'Ban, kick, warn, timeout and warning tools.',
     blurb: 'Keep your server safe with complete member management.',
     commands: ['ban', 'unban', 'kick', 'warn', 'warnings', 'clearwarnings', 'timeout', 'untimeout']
@@ -22,7 +23,7 @@ const CATEGORIES = [
   {
     value: 'antinuke',
     label: 'Anti-Nuke',
-    emoji: '⚙️',
+    emoji: ZyronEmbedBuilder.emoji('shield'),
     description: 'Core protections, whitelist and per-feature whitelist.',
     blurb: 'Stop nukers before they destroy your server.',
     commands: ['antinuke', 'featurewl']
@@ -30,7 +31,7 @@ const CATEGORIES = [
   {
     value: 'ai',
     label: 'AI Engine',
-    emoji: '🧠',
+    emoji: ZyronEmbedBuilder.emoji('ai'),
     description: 'OpenRouter AI second opinion for nukes, raids and abuse.',
     blurb: 'AI confirms threats before Zyron acts, and clears false alarms.',
     commands: ['ai']
@@ -38,7 +39,7 @@ const CATEGORIES = [
   {
     value: 'automod',
     label: 'AutoMod & Filters',
-    emoji: '🤖',
+    emoji: ZyronEmbedBuilder.emoji('lightning'),
     description: 'Discord native AutoMod, profanity, anti-spam, anti-link.',
     blurb: 'Filter profanity, spam, links and mention abuse automatically.',
     commands: ['automod'],
@@ -47,7 +48,7 @@ const CATEGORIES = [
   {
     value: 'antiraid',
     label: 'Anti-Raid',
-    emoji: '🚨',
+    emoji: ZyronEmbedBuilder.emoji('raid'),
     description: 'Mass join detection and raid punishment.',
     blurb: 'Stop mass join raids with automatic kick or ban.',
     commands: ['automod'],
@@ -56,7 +57,7 @@ const CATEGORIES = [
   {
     value: 'antipetrayal',
     label: 'Anti-Betrayal',
-    emoji: '🕵️',
+    emoji: ZyronEmbedBuilder.emoji('whitelist'),
     description: 'Rogue owner and staff detection.',
     blurb: 'Catch trusted teammates who turn destructive.',
     commands: ['automod'],
@@ -65,7 +66,7 @@ const CATEGORIES = [
   {
     value: 'emergency',
     label: 'Auto-Emergency',
-    emoji: '🔒',
+    emoji: ZyronEmbedBuilder.emoji('emergency'),
     description: 'Automatic lockdown and emergency controls.',
     blurb: 'Lock the server instantly when a punishment fails or a raid hits.',
     commands: ['automod', 'lockdown', 'unlockdown'],
@@ -74,7 +75,7 @@ const CATEGORIES = [
   {
     value: 'economy',
     label: 'Economy',
-    emoji: '💰',
+    emoji: ZyronEmbedBuilder.emoji('economy'),
     description: 'Daily rewards, coins, transfers and leaderboard.',
     blurb: 'Earn coins daily, send to friends, climb the leaderboard.',
     commands: ['economy']
@@ -82,7 +83,7 @@ const CATEGORIES = [
   {
     value: 'community',
     label: 'Community',
-    emoji: '🎉',
+    emoji: ZyronEmbedBuilder.emoji('party'),
     description: 'Tickets, polls, giveaways and staff applications.',
     blurb: 'Engage and support your members.',
     commands: ['ticket', 'poll', 'giveaway', 'staff-apply']
@@ -90,7 +91,7 @@ const CATEGORIES = [
   {
     value: 'utility',
     label: 'Utility',
-    emoji: '📋',
+    emoji: ZyronEmbedBuilder.emoji('settings'),
     description: 'Purge, lock, unlock, autorole and profile.',
     blurb: 'Everyday tools to keep channels clean and roles automatic.',
     commands: ['purge', 'lock', 'unlock', 'autorole', 'invites', 'profile']
@@ -98,10 +99,10 @@ const CATEGORIES = [
   {
     value: 'information',
     label: 'Information',
-    emoji: 'ℹ️',
+    emoji: ZyronEmbedBuilder.emoji('info'),
     description: 'Help menu, invite link, bot details and bot owners.',
     blurb: 'Everything you need to know about Zyron.',
-    commands: ['help', 'owner', 'webtest']
+    commands: ['help', 'owner', 'webtest', 'theme']
   }
 ];
 
@@ -139,7 +140,7 @@ function buildMenu() {
     new StringSelectMenuOptionBuilder()
       .setLabel('Home')
       .setDescription('Go back to the main help page.')
-      .setEmoji('🏠')
+      .setEmoji(ZyronEmbedBuilder.emoji('help'))
       .setValue('home')
   );
 
@@ -163,7 +164,7 @@ function buildHome(client, prefix, user) {
       name: config.botName + ' • Help Center',
       iconURL: client.user.displayAvatarURL()
     })
-    .setTitle('🛡️ ' + config.botName + ' Help Menu')
+    .setTitle(ZyronEmbedBuilder.emoji('shield') + ' ' + config.botName + ' Help Menu')
     .setDescription(
       'Hey **' + user.username + '**, welcome to **' + config.botName + '**.\n' +
       'A complete moderation & anti-nuke bot built to protect your server.\n\n' +
@@ -275,7 +276,7 @@ function buildCommandInfo(client, prefix, command, user) {
       name: config.botName + ' • Help Center',
       iconURL: client.user.displayAvatarURL()
     })
-    .setTitle('📖 Command Info — ' + prefix + command.name)
+    .setTitle(ZyronEmbedBuilder.emoji('info') + ' Command Info — ' + prefix + command.name)
     .setDescription(command.description)
     .addFields(
       {
@@ -334,7 +335,7 @@ module.exports = {
           embeds: [
             new EmbedBuilder()
               .setColor(config.colors.danger)
-              .setTitle('❌ Command Not Found')
+              .setTitle(ZyronEmbedBuilder.emoji('error') + ' Command Not Found')
               .setDescription('I could not find a command called **' + search + '**.\nRun ' + prefix + 'help to open the menu.')
           ]
         });

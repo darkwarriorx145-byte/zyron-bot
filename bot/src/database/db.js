@@ -20,6 +20,33 @@ const DASHBOARD_KEYS = [
   'autoRoleId',
   'autoRoleBotId',
   'boosterRoleId',
+  'ticketCategory',
+  'ticketLogChannel',
+  'ticketStaffRole',
+  'ticketStaffRoles',
+  'ticketNamePattern',
+  'ticketAiEnabled',
+  'ticketPanelChannel',
+  'ticketPanelTitle',
+  'ticketPanelDescription',
+  'ticketPanelFooter',
+  'ticketCreateLabel',
+  'ticketCreateEmoji',
+  'ticketButtons',
+  'applicationChannel',
+  'staffApplyAcceptRole',
+  'staffApplyAcceptRoles',
+  'appealInviteChannel',
+  'warningKickThreshold',
+  'staffApplyPanelTitle',
+  'staffApplyPanelDescription',
+  'staffApplyPanelFooter',
+  'staffApplyButtonLabel',
+  'staffApplyButtonEmoji',
+  'staffApplyModalTitle',
+  'staffApplyAcceptMessage',
+  'staffApplyDenyMessage',
+  'staffApplyQuestions',
   'features'
 ];
 
@@ -63,7 +90,10 @@ class Database {
       inviteMembers: {},
       coOwners: [],
       lockdowns: {},
-      cooldowns: {}
+      cooldowns: {},
+      tickets: {},
+      staffApplications: {},
+      appeals: {}
     };
     this.messageBuffer = 0;
     this.lastSyncMtime = 0;
@@ -97,6 +127,9 @@ class Database {
         this.data.lockdowns = parsed.lockdowns || {};
         this.data.coins = parsed.coins || {};
         this.data.cooldowns = parsed.cooldowns || {};
+        this.data.tickets = parsed.tickets || {};
+        this.data.staffApplications = parsed.staffApplications || {};
+        this.data.appeals = parsed.appeals || {};
       } catch (err) {
         console.error('Database load failed, starting fresh:', err.message);
       }
@@ -159,9 +192,31 @@ class Database {
         ticketCategory: null,
         ticketLogChannel: null,
         ticketStaffRole: null,
+        ticketStaffRoles: [],
+        ticketNamePattern: 'ticket-{{ticket_number}}',
+        ticketAiEnabled: true,
         ticketCounter: 0,
         ticketButtons: [],
+        ticketPanelChannel: null,
+        ticketPanelTitle: null,
+        ticketPanelDescription: null,
+        ticketPanelFooter: null,
+        ticketCreateLabel: 'Create Ticket',
+        ticketCreateEmoji: '🎫',
         applicationChannel: null,
+        staffApplyAcceptRole: null,
+        staffApplyAcceptRoles: [],
+        appealInviteChannel: null,
+        warningKickThreshold: 5,
+        staffApplyPanelTitle: null,
+        staffApplyPanelDescription: null,
+        staffApplyPanelFooter: null,
+        staffApplyButtonLabel: 'Apply Now',
+        staffApplyButtonEmoji: '📝',
+        staffApplyModalTitle: 'Staff Application',
+        staffApplyAcceptMessage: null,
+        staffApplyDenyMessage: null,
+        staffApplyQuestions: [],
         inviteLogChannel: null,
         autoRoleId: null,
         autoRoleBotId: null,
@@ -202,7 +257,27 @@ class Database {
     if (guild.economyDaily === undefined) guild.economyDaily = 100;
     if (guild.economyInvite === undefined) guild.economyInvite = 25;
     if (!guild.ticketButtons) guild.ticketButtons = [];
+    if (!Array.isArray(guild.ticketStaffRoles)) guild.ticketStaffRoles = [];
+    if (!guild.ticketNamePattern) guild.ticketNamePattern = 'ticket-{{ticket_number}}';
+    if (guild.ticketAiEnabled === undefined) guild.ticketAiEnabled = true;
+    if (!Array.isArray(guild.staffApplyAcceptRoles)) guild.staffApplyAcceptRoles = [];
+    if (!guild.appealInviteChannel) guild.appealInviteChannel = null;
+    if (guild.warningKickThreshold === undefined) guild.warningKickThreshold = 5;
     if (guild.ticketCounter === undefined) guild.ticketCounter = 0;
+    if (!guild.ticketPanelTitle) guild.ticketPanelTitle = null;
+    if (!guild.ticketPanelDescription) guild.ticketPanelDescription = null;
+    if (!guild.ticketPanelFooter) guild.ticketPanelFooter = null;
+    if (!guild.ticketCreateLabel) guild.ticketCreateLabel = 'Create Ticket';
+    if (!guild.ticketCreateEmoji) guild.ticketCreateEmoji = '🎫';
+    if (!guild.staffApplyPanelTitle) guild.staffApplyPanelTitle = null;
+    if (!guild.staffApplyPanelDescription) guild.staffApplyPanelDescription = null;
+    if (!guild.staffApplyPanelFooter) guild.staffApplyPanelFooter = null;
+    if (!guild.staffApplyButtonLabel) guild.staffApplyButtonLabel = 'Apply Now';
+    if (!guild.staffApplyButtonEmoji) guild.staffApplyButtonEmoji = '📝';
+    if (!guild.staffApplyModalTitle) guild.staffApplyModalTitle = 'Staff Application';
+    if (!guild.staffApplyAcceptMessage) guild.staffApplyAcceptMessage = null;
+    if (!guild.staffApplyDenyMessage) guild.staffApplyDenyMessage = null;
+    if (!Array.isArray(guild.staffApplyQuestions)) guild.staffApplyQuestions = [];
 
     const base = defaults();
     for (const key in base) {
@@ -366,6 +441,8 @@ class Database {
       id: Date.now().toString(36) + Math.random().toString(36).substring(2, 6),
       reason: info.reason ? info.reason : 'No reason provided',
       moderator: info.moderator ? info.moderator : null,
+      type: info.type ? String(info.type).slice(0, 20) : 'manual',
+      source: info.source ? String(info.source).slice(0, 30) : null,
       timestamp: Date.now()
     });
 
@@ -497,6 +574,154 @@ class Database {
   getInviteRecord(guildId, memberId) {
     if (!this.data.inviteMembers[guildId]) return null;
     return this.data.inviteMembers[guildId][memberId] || null;
+  }
+
+  // Ticket, staff-application and appeal activity.
+  ensureActivity(guildId) {
+    if (!this.data.tickets) this.data.tickets = {};
+    if (!this.data.staffApplications) this.data.staffApplications = {};
+    if (!this.data.appeals) this.data.appeals = {};
+    if (!Array.isArray(this.data.tickets[guildId])) this.data.tickets[guildId] = [];
+    if (!Array.isArray(this.data.staffApplications[guildId])) this.data.staffApplications[guildId] = [];
+    if (!Array.isArray(this.data.appeals[guildId])) this.data.appeals[guildId] = [];
+  }
+
+  makeActivityId(prefix) {
+    return String(prefix || 'z') + Date.now().toString(36) +
+      Math.random().toString(36).substring(2, 7);
+  }
+
+  addTicket(guildId, data) {
+    this.ensureActivity(guildId);
+    const info = data || {};
+    const entry = {
+      id: info.id || this.makeActivityId('t'),
+      number: info.number || 0,
+      channelId: info.channelId || null,
+      userId: info.userId || null,
+      type: info.type || 'General Support',
+      reason: String(info.reason || '').slice(0, 1500),
+      status: info.status || 'open',
+      claimedBy: info.claimedBy || null,
+      closedBy: info.closedBy || null,
+      closeReason: info.closeReason || null,
+      aiReplies: 0,
+      aiPaused: false,
+      handledBy: null,
+      createdAt: info.createdAt || Date.now(),
+      closedAt: null
+    };
+    this.data.tickets[guildId].push(entry);
+    this.save();
+    return entry;
+  }
+
+  getTickets(guildId) {
+    this.ensureActivity(guildId);
+    return this.data.tickets[guildId];
+  }
+
+  getTicket(guildId, ticketId) {
+    return this.getTickets(guildId).filter(function (ticket) {
+      return ticket.id === ticketId;
+    })[0] || null;
+  }
+
+  getTicketByChannel(guildId, channelId) {
+    return this.getTickets(guildId).filter(function (ticket) {
+      return ticket.channelId === channelId;
+    })[0] || null;
+  }
+
+  updateTicket(guildId, ticketId, updates) {
+    const ticket = this.getTicket(guildId, ticketId);
+    if (!ticket) return null;
+    Object.assign(ticket, updates || {});
+    this.save();
+    return ticket;
+  }
+
+  addStaffApplication(guildId, data) {
+    this.ensureActivity(guildId);
+    const info = data || {};
+    const entry = {
+      id: info.id || this.makeActivityId('a'),
+      userId: info.userId || null,
+      status: info.status || 'pending',
+      channelId: info.channelId || null,
+      messageId: info.messageId || null,
+      reviewedBy: null,
+      reviewedAt: null,
+      decision: null,
+      createdAt: info.createdAt || Date.now()
+    };
+    this.data.staffApplications[guildId].push(entry);
+    this.save();
+    return entry;
+  }
+
+  getStaffApplications(guildId) {
+    this.ensureActivity(guildId);
+    return this.data.staffApplications[guildId];
+  }
+
+  updateStaffApplication(guildId, userId, updates) {
+    const list = this.getStaffApplications(guildId);
+    let entry = null;
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].userId === userId) {
+        entry = list[i];
+        break;
+      }
+    }
+    if (!entry) return null;
+    Object.assign(entry, updates || {});
+    this.save();
+    return entry;
+  }
+
+  addAppeal(guildId, data) {
+    this.ensureActivity(guildId);
+    const info = data || {};
+    const entry = {
+      id: info.id || this.makeActivityId('p'),
+      userId: info.userId || null,
+      action: info.action || 'kick',
+      actionTaken: info.actionTaken || 'Kicked from the server',
+      reason: String(info.reason || '').slice(0, 1500),
+      warnings: info.warnings || 0,
+      type: info.type || 'minor',
+      status: 'pending',
+      answers: info.answers || null,
+      reviewedBy: null,
+      reviewedAt: null,
+      inviteUrl: null,
+      channelId: info.channelId || null,
+      messageId: info.messageId || null,
+      createdAt: info.createdAt || Date.now()
+    };
+    this.data.appeals[guildId].push(entry);
+    this.save();
+    return entry;
+  }
+
+  getAppeals(guildId) {
+    this.ensureActivity(guildId);
+    return this.data.appeals[guildId];
+  }
+
+  getAppeal(guildId, caseId) {
+    return this.getAppeals(guildId).filter(function (appeal) {
+      return appeal.id === caseId;
+    })[0] || null;
+  }
+
+  updateAppeal(guildId, caseId, updates) {
+    const appeal = this.getAppeal(guildId, caseId);
+    if (!appeal) return null;
+    Object.assign(appeal, updates || {});
+    this.save();
+    return appeal;
   }
 
   // Economy methods

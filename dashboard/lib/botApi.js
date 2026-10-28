@@ -89,6 +89,22 @@ async function updateSettings(guildId, updates) {
   return request('PATCH', '/api/guilds/' + encodeURIComponent(guildId) + '/settings', updates);
 }
 
+async function getActivity(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/activity');
+}
+
+async function reviewAppeal(guildId, caseId, action, reviewerId) {
+  return request(
+    'POST',
+    '/api/guilds/' + encodeURIComponent(guildId) + '/appeals/' + encodeURIComponent(caseId) + '/review',
+    { action: action, reviewerId: reviewerId || null }
+  );
+}
+
+async function staffAction(guildId, payload) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/staff/action', payload || {});
+}
+
 let lastHeartbeatAt = 0;
 
 async function heartbeat(payload, force) {
@@ -144,6 +160,9 @@ module.exports = {
   getMeta: getMeta,
   getSettings: getSettings,
   updateSettings: updateSettings,
+  getActivity: getActivity,
+  reviewAppeal: reviewAppeal,
+  staffAction: staffAction,
   heartbeat: heartbeat,
   test: test
 };

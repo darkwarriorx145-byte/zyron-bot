@@ -30,7 +30,9 @@ module.exports = {
 
     fields.push({
       name: 'Bot API',
-      value: status.running ? '🟢 Online' : '🔴 Offline',
+      value: status.running
+        ? ZyronEmbedBuilder.emoji('success') + ' Online'
+        : ZyronEmbedBuilder.emoji('error') + ' Offline',
       inline: true
     });
 
@@ -42,7 +44,9 @@ module.exports = {
 
     fields.push({
       name: 'API Key',
-      value: status.keyConfigured ? '✅ Configured' : '❌ Missing',
+      value: status.keyConfigured
+        ? ZyronEmbedBuilder.emoji('success') + ' Configured'
+        : ZyronEmbedBuilder.emoji('error') + ' Missing',
       inline: true
     });
 
@@ -87,14 +91,14 @@ module.exports = {
     fields.push({
       name: 'Dashboard Health Check',
       value: dashboardCheck.ok
-        ? '🟢 Reachable' + (dashboardCheck.status ? ' (HTTP ' + dashboardCheck.status + ')' : '')
-        : '🔴 ' + (dashboardCheck.error || 'Not reachable'),
+        ? ZyronEmbedBuilder.emoji('success') + ' Reachable' + (dashboardCheck.status ? ' (HTTP ' + dashboardCheck.status + ')' : '')
+        : ZyronEmbedBuilder.emoji('error') + ' ' + (dashboardCheck.error || 'Not reachable'),
       inline: false
     });
 
     const linked = status.running && Boolean(status.lastHeartbeat);
     const embed = ZyronEmbedBuilder.base({
-      title: '🌐 Website Link Test',
+      title: ZyronEmbedBuilder.emoji('spark') + ' Website Link Test',
       description: linked
         ? 'The website has successfully contacted the bot. The bridge is working.'
         : 'The website link is not fully verified yet. Follow the setup fields below.',

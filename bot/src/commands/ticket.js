@@ -11,6 +11,7 @@ const {
 } = require('discord.js');
 const db = require('../database/db');
 const config = require('../../config.json');
+const ticketAssistant = require('../utils/ticketAssistant');
 
 const P = PermissionsBitField.Flags;
 
@@ -18,6 +19,25 @@ function pad(value) {
   let text = String(value);
   while (text.length < 6) text = '0' + text;
   return text;
+}
+
+function ticketChannelName(settings, digits, user, type) {
+  const pattern = String(settings.ticketNamePattern || 'ticket-{{ticket_number}}');
+  const cleanUser = String(user && user.username ? user.username : 'user').toLowerCase();
+  const cleanType = String(type || 'support').toLowerCase();
+  const name = pattern
+    .split('{{ticket_number}}').join(digits)
+    .split('{{ticket_id}}').join(digits)
+    .split('{{user}}').join(cleanUser)
+    .split('{{username}}').join(cleanUser)
+    .split('{{type}}').join(cleanType)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 100);
+
+  return name || ('ticket-' + digits);
 }
 
 function parseTopic(topic) {
@@ -40,11 +60,20 @@ function isTicketChannel(channel) {
 }
 
 function isStaff(member, settings) {
-  if (!member) return false;
-  if (member.permissions.has(P.ManageGuild)) return true;
-  if (member.permissions.has(P.ManageChannels)) return true;
-  if (settings.ticketStaffRole && member.roles.cache.has(settings.ticketStaffRole)) return true;
-  return false;
+  return ticketAssistant.isTicketStaff(member, settings);
+}
+
+function addStaffOverwrites(overwrites, guild, settings) {
+  ticketAssistant.roleIds(settings).forEach(function (roleId) {
+    const role = guild.roles.cache.get(roleId);
+    if (!role) return;
+    if (overwrites.some(function (item) { return item.id === role.id; })) return;
+    overwrites.push({
+      id: role.id,
+      allow: [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.ManageMessages, P.AttachFiles, P.EmbedLinks]
+    });
+  });
+  return overwrites;
 }
 
 function ticketOverwrites(guild, settings, client, ownerId) {
@@ -63,50 +92,52 @@ function ticketOverwrites(guild, settings, client, ownerId) {
     }
   ];
 
-  if (settings.ticketStaffRole) {
-    const role = guild.roles.cache.get(settings.ticketStaffRole);
-    if (role) {
-      overwrites.push({
-        id: role.id,
-        allow: [P.ViewChannel, P.SendMessages, P.ReadMessageHistory, P.ManageMessages, P.AttachFiles, P.EmbedLinks]
-      });
-    }
-  }
-
+  addStaffOverwrites(overwrites, guild, settings);
   return overwrites;
 }
 
-function panelEmbed(settings) {
-  const custom = settings.ticketButtons || [];
-  let extra = '';
+const DEFAULT_TICKET_TITLE = '🎫 ' + config.botName + ' Support Tickets';
+const DEFAULT_TICKET_DESCRIPTION =
+  'Need help from our staff team?\n\n' +
+  'Click a button below and a private channel will open instantly.\n\n' +
+  '{{buttons}}\n\n' +
+  '**Inside a ticket**\n' +
+  '• Claim — staff member takes the ticket\n' +
+  '• Rename — change the ticket channel name\n' +
+  '• Add User — invite someone to the ticket\n' +
+  '• Remove User — remove someone from the ticket\n' +
+  '• Close — delete the ticket when finished\n\n' +
+  '**Rules**\n' +
+  '• One ticket per member\n' +
+  '• Do not open fake tickets\n' +
+  '• Staff will reply as soon as possible';
+const DEFAULT_TICKET_FOOTER = config.botName + ' • Powered by ' + config.company;
 
-  if (custom.length > 0) {
-    const lines = custom.map(function (button) {
-      return '• ' + (button.emoji ? button.emoji + ' ' : '') + '**' + button.label + '** — ' + button.message;
-    });
-    extra = '\n**Ticket Types**\n' + lines.join('\n') + '\n';
-  }
+function ticketButtonLines(buttons) {
+  if (!buttons || buttons.length === 0) return '';
+  const lines = buttons.map(function (button) {
+    return '• ' + (button.emoji ? button.emoji + ' ' : '') + '**' + button.label + '** — ' + button.message;
+  });
+  return '**Ticket Types**\n' + lines.join('\n');
+}
+
+function panelEmbed(settings) {
+  const descriptionTemplate = settings.ticketPanelDescription || DEFAULT_TICKET_DESCRIPTION;
+  const description = descriptionTemplate.split('{{buttons}}').join(ticketButtonLines(settings.ticketButtons || []));
 
   return new EmbedBuilder()
     .setColor(config.colors.primary)
-    .setTitle('🎫 ' + config.botName + ' Support Tickets')
-    .setDescription(
-      'Need help from our staff team?\n\n' +
-      'Click a button below and a private channel will open instantly.\n' +
-      extra +
-      '\n**Inside a ticket**\n' +
-      '• Claim — staff member takes the ticket\n' +
-      '• Rename — change the ticket channel name\n' +
-      '• Add User — invite someone to the ticket\n' +
-      '• Remove User — remove someone from the ticket\n' +
-      '• Close — delete the ticket when finished\n\n' +
-      '**Rules**\n' +
-      '• One ticket per member\n' +
-      '• Do not open fake tickets\n' +
-      '• Staff will reply as soon as possible'
-    )
-    .setFooter({ text: config.botName + ' • Powered by ' + config.company })
+    .setTitle(settings.ticketPanelTitle || DEFAULT_TICKET_TITLE)
+    .setDescription(description.slice(0, 4096))
+    .setFooter({ text: (settings.ticketPanelFooter || DEFAULT_TICKET_FOOTER).slice(0, 2048) })
     .setTimestamp();
+}
+
+function buttonStyleFor(style) {
+  if (style === 'primary') return ButtonStyle.Primary;
+  if (style === 'success') return ButtonStyle.Success;
+  if (style === 'danger') return ButtonStyle.Danger;
+  return ButtonStyle.Secondary;
 }
 
 function buildPanelRows(settings) {
@@ -114,20 +145,25 @@ function buildPanelRows(settings) {
   const rows = [];
   let current = new ActionRowBuilder();
 
-  current.addComponents(
-    new ButtonBuilder()
-      .setCustomId('ticket:create')
-      .setLabel('Create Ticket')
-      .setEmoji('🎫')
-      .setStyle(ButtonStyle.Primary)
-  );
+  const createButton = new ButtonBuilder()
+    .setCustomId('ticket:create')
+    .setLabel(String(settings.ticketCreateLabel || 'Create Ticket').slice(0, 80))
+    .setStyle(ButtonStyle.Primary);
+
+  try {
+    createButton.setEmoji(settings.ticketCreateEmoji || '🎫');
+  } catch (err) {
+    createButton.setEmoji('🎫');
+  }
+
+  current.addComponents(createButton);
 
   for (let i = 0; i < buttons.length; i++) {
     const data = buttons[i];
     const button = new ButtonBuilder()
       .setCustomId('ticket:custom:' + i)
       .setLabel(String(data.label).slice(0, 80))
-      .setStyle(ButtonStyle.Secondary);
+      .setStyle(buttonStyleFor(data.style));
 
     if (data.emoji) {
       try {
@@ -212,11 +248,36 @@ async function renameChannel(channel, info, rawName) {
   return renamed;
 }
 
-async function createTicket(client, interaction, custom) {
+function ticketReasonModal(customId, label) {
+  const modal = new ModalBuilder()
+    .setCustomId(customId)
+    .setTitle(String(label || 'Open a Ticket').slice(0, 45));
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(
+      new TextInputBuilder()
+        .setCustomId('reason')
+        .setLabel('Reason for opening this ticket')
+        .setPlaceholder('Explain your issue in a few clear sentences')
+        .setStyle(TextInputStyle.Paragraph)
+        .setMaxLength(1000)
+        .setRequired(true)
+    )
+  );
+
+  return modal;
+}
+
+async function createTicket(client, interaction, custom, reason) {
   await interaction.deferReply({ ephemeral: true });
 
   const guild = interaction.guild;
   const settings = db.getGuild(guild.id);
+  const requestReason = String(reason || '').trim().slice(0, 1500);
+
+  if (!requestReason) {
+    return interaction.editReply({ content: 'A ticket reason is required. Please try again.' });
+  }
 
   const existing = guild.channels.cache.find(function (channel) {
     if (!isTicketChannel(channel)) return false;
@@ -235,10 +296,10 @@ async function createTicket(client, interaction, custom) {
   const id = '#' + digits;
   const parent = settings.ticketCategory ? guild.channels.cache.get(settings.ticketCategory) : null;
   const type = custom ? String(custom.label).replace(/\|/g, '/') : 'General Support';
-  const intro = custom ? String(custom.message || '').replace(/\|/g, '/') : '';
+  const channelName = ticketChannelName(settings, digits, interaction.user, type);
 
   const channel = await guild.channels.create({
-    name: 'ticket-' + digits,
+    name: channelName,
     type: ChannelType.GuildText,
     parent: parent ? parent.id : null,
     topic: 'Ticket ' + id + ' | owner:' + interaction.user.id + ' | claimed:none | type:' + type,
@@ -251,15 +312,49 @@ async function createTicket(client, interaction, custom) {
     return interaction.editReply({ content: 'I could not create the ticket channel. Check my Manage Channels permission.' });
   }
 
-  const mention = '<@' + interaction.user.id + '>' + (settings.ticketStaffRole ? ' <@&' + settings.ticketStaffRole + '>' : '');
+  db.addTicket(guild.id, {
+    number: counter,
+    channelId: channel.id,
+    userId: interaction.user.id,
+    type: type,
+    reason: requestReason,
+    status: 'open'
+  });
+
+  const staffMentions = ticketAssistant.roleIds(settings).map(function (roleId) {
+    return '<@&' + roleId + '>';
+  });
+  const mention = ('<@' + interaction.user.id + '> ' + staffMentions.join(' ')).trim();
 
   await channel.send({
     content: mention,
-    embeds: [ticketEmbed(id, interaction.user.id, null, type, intro)],
+    embeds: [ticketEmbed(id, interaction.user.id, null, type, requestReason)],
     components: [ticketButtons()]
   }).catch(function () {});
 
-  return interaction.editReply({ content: 'Your ticket is ready: ' + channel + ' (**' + id + '** — ' + type + ')' });
+  await interaction.editReply({ content: 'Your ticket is ready: ' + channel + ' (**' + id + '** - ' + type + ')' });
+
+  if (settings.ticketAiEnabled !== false && settings.aiEnabled !== false) {
+    ticketAssistant.firstReply({
+      guild: guild,
+      settings: settings,
+      type: type,
+      user: interaction.user,
+      reason: requestReason
+    }).then(function (text) {
+      return channel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor(config.colors.primary)
+            .setAuthor({ name: config.botName + ' AI Support', iconURL: client.user.displayAvatarURL() })
+            .setDescription(String(text).slice(0, 4096))
+            .setFooter({ text: 'AI assistant | Staff can take over at any time' })
+        ]
+      });
+    }).catch(function (err) {
+      console.error('Ticket AI reply error:', err.message);
+    });
+  }
 }
 
 module.exports = {
@@ -410,7 +505,12 @@ module.exports = {
       }
 
       if (sub === 'setup') {
-        db.updateGuild(message.guild.id, { ticketCategory: categoryId || settings.ticketCategory });
+        db.updateGuild(message.guild.id, {
+          ticketCategory: categoryId || settings.ticketCategory,
+          ticketPanelChannel: channel.id
+        });
+      } else {
+        db.updateGuild(message.guild.id, { ticketPanelChannel: channel.id });
       }
 
       await channel.send({ embeds: [panelEmbed(settings)], components: buildPanelRows(settings) });
@@ -498,6 +598,15 @@ module.exports = {
       }
 
       const reason = args.slice(1).join(' ') || 'No reason provided';
+      const record = db.getTicketByChannel(message.guild.id, message.channel.id);
+      if (record) {
+        db.updateTicket(message.guild.id, record.id, {
+          status: 'closed',
+          closedBy: message.author.id,
+          closeReason: reason,
+          closedAt: Date.now()
+        });
+      }
 
       await message.channel.send({
         embeds: [
@@ -507,6 +616,25 @@ module.exports = {
             .setDescription('Closed by ' + message.author.tag + '\n**Reason:** ' + reason + '\n\nDeleting in 5 seconds.')
         ]
       });
+
+      const logId = settings.ticketLogChannel || settings.logChannel;
+      const logChannel = logId ? message.guild.channels.cache.get(logId) : null;
+      if (logChannel) {
+        logChannel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(config.colors.primary)
+              .setTitle('Ticket Closed')
+              .setDescription(
+                '**Ticket:** ' + (info.id || 'unknown') + '\n' +
+                '**Owner:** <@' + (info.owner || 'unknown') + '>\n' +
+                '**Closed by:** ' + message.author.tag + ' (<@' + message.author.id + '>)\n' +
+                '**Reason:** ' + reason
+              )
+              .setTimestamp()
+          ]
+        }).catch(function () {});
+      }
 
       setTimeout(function () {
         message.channel.delete('Ticket closed by ' + message.author.tag + ': ' + reason).catch(function () {});
@@ -525,6 +653,9 @@ module.exports = {
       }
 
       await message.channel.setTopic('Ticket ' + (info.id || '#unknown') + ' | owner:' + (info.owner || 'unknown') + ' | claimed:' + message.author.id + ' | type:' + (info.type || 'General Support')).catch(function () {});
+
+      const record = db.getTicketByChannel(message.guild.id, message.channel.id);
+      if (record) db.updateTicket(message.guild.id, record.id, { claimedBy: message.author.id });
 
       return message.channel.send({
         embeds: [
@@ -588,7 +719,7 @@ module.exports = {
     const action = parts[1];
 
     if (action === 'create') {
-      return createTicket(client, interaction, null);
+      return interaction.showModal(ticketReasonModal('ticket:reason:create', 'Open a Ticket'));
     }
 
     if (action === 'custom') {
@@ -600,7 +731,31 @@ module.exports = {
         return interaction.reply({ content: 'This ticket button no longer exists.', ephemeral: true });
       }
 
-      return createTicket(client, interaction, custom);
+      return interaction.showModal(ticketReasonModal(
+        'ticket:reason:custom:' + index,
+        custom.label || 'Open a Ticket'
+      ));
+    }
+
+    if (action === 'reason') {
+      const mode = parts[2];
+      let custom = null;
+      if (mode === 'custom') {
+        const index = parseInt(parts[3], 10);
+        custom = (settings.ticketButtons || [])[index] || null;
+        if (!custom) {
+          return interaction.reply({ content: 'This ticket button no longer exists.', ephemeral: true });
+        }
+      }
+
+      let reason = '';
+      try {
+        reason = interaction.fields.getTextInputValue('reason');
+      } catch (err) {
+        reason = '';
+      }
+
+      return createTicket(client, interaction, custom, reason);
     }
 
     const channel = interaction.channel;
@@ -621,6 +776,16 @@ module.exports = {
         return interaction.reply({ content: 'Only the ticket owner or staff can close this ticket.', ephemeral: true });
       }
 
+      const record = db.getTicketByChannel(interaction.guild.id, channel.id);
+      if (record) {
+        db.updateTicket(interaction.guild.id, record.id, {
+          status: 'closed',
+          closedBy: interaction.user.id,
+          closeReason: 'Closed with the ticket button',
+          closedAt: Date.now()
+        });
+      }
+
       await interaction.reply({
         embeds: [
           new EmbedBuilder()
@@ -630,11 +795,49 @@ module.exports = {
         ]
       });
 
+      const logId = settings.ticketLogChannel || settings.logChannel;
+      const logChannel = logId ? interaction.guild.channels.cache.get(logId) : null;
+      if (logChannel) {
+        logChannel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor(config.colors.primary)
+              .setTitle('Ticket Closed')
+              .setDescription(
+                '**Ticket:** ' + (info.id || 'unknown') + '\n' +
+                '**Owner:** <@' + (info.owner || 'unknown') + '>\n' +
+                '**Closed by:** ' + interaction.user.tag + ' (<@' + interaction.user.id + '>)\n' +
+                '**Reason:** Closed with the ticket button'
+              )
+              .setTimestamp()
+          ]
+        }).catch(function () {});
+      }
+
       setTimeout(function () {
         channel.delete('Ticket closed by ' + interaction.user.tag).catch(function () {});
       }, 5000);
 
       return;
+    }
+
+    if (action === 'ai' && parts[2] === 'resume') {
+      if (!owner && !staff) {
+        return interaction.reply({ content: 'Only the ticket owner or staff can change the AI mode.', ephemeral: true });
+      }
+
+      const record = db.getTicketByChannel(interaction.guild.id, channel.id);
+      if (record) {
+        db.updateTicket(interaction.guild.id, record.id, {
+          aiPaused: false,
+          handledBy: null
+        });
+      }
+
+      return interaction.reply({
+        content: 'AI support is active again. Send your next message and Zyron will reply.',
+        ephemeral: true
+      });
     }
 
     if (action === 'claim') {
@@ -647,6 +850,9 @@ module.exports = {
       }
 
       await channel.setTopic('Ticket ' + (info.id || '#unknown') + ' | owner:' + (info.owner || 'unknown') + ' | claimed:' + interaction.user.id + ' | type:' + (info.type || 'General Support')).catch(function () {});
+
+      const record = db.getTicketByChannel(interaction.guild.id, channel.id);
+      if (record) db.updateTicket(interaction.guild.id, record.id, { claimedBy: interaction.user.id });
 
       return interaction.reply({
         embeds: [

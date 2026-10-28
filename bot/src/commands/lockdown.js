@@ -27,7 +27,7 @@ module.exports = {
 
     const embed = ZyronEmbedBuilder.base({
       color: config.colors.danger,
-      title: '🚨 SERVER LOCKDOWN ACTIVE',
+      title: ZyronEmbedBuilder.emoji('warning') + ' SERVER LOCKDOWN ACTIVE',
       description:
         '**Locked Channels:** ' + result.count + ' / ' + result.total + '\n' +
         '**Reason:** ' + reason + '\n' +

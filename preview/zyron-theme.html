@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zyron Theme Preview</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #313338;
+      color: #dbdee1;
+      font-family: "gg sans", "Segoe UI", Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+    }
+    .message {
+      width: 560px;
+      max-width: 100%;
+    }
+    .message-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #1b1c1f;
+      border: 2px solid #ed4245;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      font-size: 22px;
+      font-weight: 800;
+      font-style: italic;
+    }
+    .name {
+      color: #f2f3f5;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .app {
+      background: #5865f2;
+      color: #fff;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 4px;
+      border-radius: 3px;
+      margin-left: 2px;
+    }
+    .time {
+      color: #949ba4;
+      font-size: 12px;
+      margin-left: 2px;
+    }
+    .embed {
+      background: #2b2d31;
+      border-left: 4px solid #5865f2;
+      border-radius: 4px;
+      padding: 16px 18px 14px;
+      box-shadow: 0 4px 18px rgba(0,0,0,.22);
+    }
+    .embed-title {
+      color: #f2f3f5;
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .section {
+      color: #f2f3f5;
+      font-size: 14px;
+      font-weight: 800;
+      margin: 12px 0 7px;
+    }
+    .line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: #dbdee1;
+      font-size: 14px;
+      line-height: 1.55;
+      margin: 4px 0;
+    }
+    .line img {
+      width: 20px;
+      height: 20px;
+      flex: 0 0 20px;
+      border-radius: 50%;
+    }
+    .line b { color: #f2f3f5; }
+    .note {
+      color: #b5bac1;
+      font-style: italic;
+      font-size: 13px;
+      margin-top: 14px;
+    }
+    .footer {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #949ba4;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+    .footer img {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+    }
+    .footer span { margin-left: auto; }
+  </style>
+</head>
+<body>
+  <div class="message">
+    <div class="message-head">
+      <div class="avatar">Z</div>
+      <div class="name">Zyron</div>
+      <div class="app">APP</div>
+      <div class="time">Today at 11:40 AM</div>
+    </div>
+
+    <div class="embed">
+      <div class="section">Added Global No Prefix:</div>
+      <div class="line"><img src="../bot/assets/emojis/zyron_user.png" alt=""><span><b>User:</b> @P...</span></div>
+      <div class="line"><img src="../bot/assets/emojis/zyron_mention.png" alt=""><span><b>User Mention:</b> @P...</span></div>
+      <div class="line"><img src="../bot/assets/emojis/zyron_id.png" alt=""><span><b>User ID:</b> 1122809875550973982</span></div>
+
+      <div class="section">Additional Info:</div>
+      <div class="line"><img src="../bot/assets/emojis/zyron_added_by.png" alt=""><span><b>Added By:</b> Ray</span></div>
+      <div class="line"><img src="../bot/assets/emojis/zyron_expiry.png" alt=""><span><b>Expiry Time:</b> 2026-07-18 06:20:35 UTC</span></div>
+      <div class="line"><img src="../bot/assets/emojis/zyron_timestamp.png" alt=""><span><b>Timestamp:</b> 18 July 2026 09:50 AM UTC</span></div>
+
+      <div class="note">DM will be sent to the user in case No Prefix is expired.</div>
+
+      <div class="footer">
+        <img src="../bot/assets/emojis/zyron_spark.png" alt="">
+        <div>Zyron • Powered by Zyra Nodes Limited</div>
+        <span>Today at 11:40 AM</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

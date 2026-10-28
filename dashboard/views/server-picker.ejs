@@ -3,207 +3,240 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Zyron — Your Servers</title>
+  <title>Zyron — Command Center</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/glass-core.css">
+  <link rel="stylesheet" href="/css/glass-server.css">
+  <link rel="stylesheet" href="/css/glass-responsive.css">
 </head>
-<body class="app">
-  <aside class="sidebar">
-    <a class="brand" href="/dashboard">
-      <span class="brand-mark"><%- include('partials/icon', { name: 'shield', size: 22 }) %></span>
-      <span class="brand-text">
-        <strong>Zyron</strong>
-        <small>Control Center</small>
-      </span>
-    </a>
+<body class="app home-page">
+  <%- include('partials/notch', { notchLabel: 'Zyron Control Center', notchMeta: 'Workspace' }) %>
+  <%- include('partials/global-sidebar', { activePage: 'home' }) %>
 
-    <nav class="nav">
-      <a class="nav-item active" href="/dashboard">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'home', size: 18 }) %></span>
-        <span>Servers</span>
-      </a>
-      <% if (user.isMainAdmin) { %>
-        <a class="nav-item" href="/admin">
-          <span class="nav-icon"><%- include('partials/icon', { name: 'crown', size: 18 }) %></span>
-          <span>Admin Panel</span>
-        </a>
-      <% } %>
-      <a class="nav-item" href="/link-test">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'globe', size: 18 }) %></span>
-        <span>Link Test</span>
-      </a>
-      <a class="nav-item" href="<%= brand.invite %>" target="_blank" rel="noopener">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'message-circle', size: 18 }) %></span>
-        <span>Support Server</span>
-      </a>
-      <a class="nav-item" href="/logout">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'log-out', size: 18 }) %></span>
-        <span>Logout</span>
-      </a>
-    </nav>
-
-    <div class="sidebar-spacer"></div>
-
-    <div class="sidebar-user">
-      <img class="avatar avatar-sm" src="<%= user.avatarUrl %>" alt="">
-      <div class="sidebar-user-meta">
-        <strong><%= user.displayName %></strong>
-        <small>@<%= user.username %></small>
-      </div>
-    </div>
-
-    <div class="sidebar-footer">
-      <span class="status-dot"></span>
-      <span>Powered by Zyra Nodes Limited</span>
-    </div>
-  </aside>
-
-  <main class="main">
-    <header class="topbar">
+  <main class="main home-main">
+    <header class="home-topbar">
       <div>
-        <p class="eyebrow">Control Center</p>
-        <h1>Your Servers</h1>
-        <p class="muted">Pick a server to configure Zyron. Only servers where you are owner or manager are shown.</p>
+        <span class="eyebrow">Workspace overview</span>
+        <h1>Good to see you, <%= (user.displayName || 'there').split(' ')[0] %>.</h1>
+        <p class="muted">One quiet place to protect, configure and grow every server.</p>
       </div>
       <div class="topbar-actions">
-        <div class="search-wrap">
-          <span class="search-icon"><%- include('partials/icon', { name: 'search', size: 15 }) %></span>
-          <input id="serverSearch" class="input search-input" type="search" placeholder="Search servers..." autocomplete="off">
-        </div>
-        <a class="btn btn-ghost" href="/dashboard">Refresh</a>
+        <a class="btn btn-ghost" href="<%= brand.invite %>" target="_blank" rel="noopener">
+          <%- include('partials/icon', { name: 'message-circle', size: 16 }) %>
+          Support
+        </a>
+        <a class="btn btn-primary" href="#servers">
+          Choose a server
+          <%- include('partials/icon', { name: 'arrow-right', size: 16 }) %>
+        </a>
       </div>
     </header>
 
-    <% if (typeof botApiOnline !== 'undefined' && botApiOnline === false) { %>
-      <div class="alert alert-warning">
-        <span class="alert-icon"><%- include('partials/icon', { name: 'wifi-off', size: 18 }) %></span>
-        <div>
-          <strong>Bot API is offline.</strong>
-          <p class="muted">Server status is coming from the bot's Discord guild list, not the live bridge. Start the bot or check <strong>BOT_API_URL</strong> and <strong>BOT_API_KEY</strong> to load live settings.</p>
+    <section id="overview" class="home-hero glass">
+      <div class="hero-copy">
+        <span class="eyebrow"><span class="status-dot tiny"></span> Protected by design</span>
+        <h2>Protect the server.<br><span class="gradient-text">Keep it beautiful.</span></h2>
+        <p>Anti-Nuke, Anti-Raid, AI Guard, tickets, staff applications and giveaways — all in one calm, glassy control center.</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#servers">Open your servers</a>
+          <a class="btn btn-ghost" href="#features">Explore features</a>
+        </div>
+        <div class="hero-trust">
+          <span><%- include('partials/icon', { name: 'check', size: 14 }) %> No premium</span>
+          <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Per-server data</span>
+          <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Main admin protected</span>
         </div>
       </div>
-    <% } %>
 
-    <section class="hero card">
-      <div class="hero-profile">
-        <img class="avatar avatar-lg" src="<%= user.avatarUrl %>" alt="">
-        <div>
-          <h2><%= user.displayName %></h2>
-          <p class="muted">@<%= user.username %> <span class="dot" aria-hidden="true"></span> Signed in with Discord</p>
-        </div>
-      </div>
-      <div class="hero-stats">
-        <div class="hero-stat">
+      <div class="hero-metrics">
+        <div class="metric-card">
+          <span class="metric-icon"><%- include('partials/icon', { name: 'server', size: 18 }) %></span>
           <strong><%= stats.total %></strong>
-          <span>Manageable</span>
+          <small>Your servers</small>
         </div>
-        <div class="hero-stat">
+        <div class="metric-card">
+          <span class="metric-icon green"><%- include('partials/icon', { name: 'bot', size: 18 }) %></span>
           <strong><%= stats.withBot %></strong>
-          <span>Protected</span>
+          <small>Zyron connected</small>
         </div>
-        <div class="hero-stat">
-          <strong><%= stats.withoutBot %></strong>
-          <span>Available</span>
-        </div>
-        <div class="hero-stat">
+        <div class="metric-card">
+          <span class="metric-icon violet"><%- include('partials/icon', { name: 'users', size: 18 }) %></span>
           <strong><%= botGuildCount %></strong>
-          <span>Bot Servers</span>
+          <small>Bot guilds</small>
+        </div>
+        <div class="metric-card">
+          <span class="metric-icon amber"><%- include('partials/icon', { name: 'layers', size: 18 }) %></span>
+          <strong>24</strong>
+          <small>Guard modules</small>
         </div>
       </div>
     </section>
 
-    <div class="section-head">
-      <div>
-        <h2>Select a server</h2>
-        <p class="muted">Free forever. Every protection is included.</p>
+    <section id="servers" class="home-section">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Your workspace</span>
+          <h2>Servers</h2>
+          <p class="muted">Pick a server to open its own control room.</p>
+        </div>
+        <span class="badge badge-muted"><%= stats.withBot %> connected · <%= stats.withoutBot %> ready to add</span>
       </div>
-      <span class="badge badge-soft">No premium tier</span>
-    </div>
 
-    <% if (servers.length === 0) { %>
-      <section class="empty card">
-        <div class="empty-icon"><%- include('partials/icon', { name: 'server', size: 40 }) %></div>
-        <h3>No manageable servers found</h3>
-        <p class="muted">
-          You need the <strong>Manage Server</strong> or <strong>Administrator</strong> permission
-          on a Discord server to configure Zyron there.
-        </p>
-        <a class="btn btn-primary" href="/dashboard">Refresh server list</a>
-      </section>
-    <% } else { %>
-      <div class="server-grid" id="serverGrid">
-        <% servers.forEach(function (server) { %>
-          <article class="server-card" data-name="<%= server.name.toLowerCase() %>">
-            <div class="server-top">
-              <div class="server-icon">
-                <% if (server.icon) { %>
-                  <img src="https://cdn.discordapp.com/icons/<%= server.id %>/<%= server.icon %>.png?size=128" alt="">
+      <% if (servers.length === 0) { %>
+        <div class="empty-state glass">
+          <span class="empty-icon"><%- include('partials/icon', { name: 'server', size: 28 }) %></span>
+          <h3>No manageable servers yet</h3>
+          <p>You need Manage Server or Administrator on a Discord server to see it here.</p>
+          <a class="btn btn-primary" href="<%= brand.invite %>" target="_blank" rel="noopener">Join the support server</a>
+        </div>
+      <% } else { %>
+        <div class="server-grid">
+          <% servers.forEach(function (server) { %>
+            <article class="server-card glass <%= server.hasBot ? 'is-connected' : '' %>">
+              <div class="server-card-head">
+                <span class="server-avatar large">
+                  <% if (server.icon) { %>
+                    <img src="https://cdn.discordapp.com/icons/<%= server.id %>/<%= server.icon %>.png?size=128" alt="">
+                  <% } else { %>
+                    <%- include('partials/icon', { name: 'server', size: 24 }) %>
+                  <% } %>
+                </span>
+                <div class="server-card-copy">
+                  <h3><%= server.name %></h3>
+                  <p>
+                    <% if (server.hasBot) { %>
+                      <span class="status-dot tiny"></span> Zyron connected
+                    <% } else { %>
+                      <span class="status-dot tiny offline"></span> Bot not added
+                    <% } %>
+                    <% if (server.owner) { %> · Owner<% } %>
+                  </p>
+                </div>
+                <span class="badge <%= server.hasBot ? 'badge-success' : 'badge-muted' %>"><%= server.hasBot ? 'Live' : 'Add bot' %></span>
+              </div>
+
+              <div class="server-card-actions">
+                <% if (server.hasBot) { %>
+                  <a class="btn btn-primary btn-sm" href="/server/<%= server.id %>">
+                    Configure
+                    <%- include('partials/icon', { name: 'arrow-right', size: 14 }) %>
+                  </a>
                 <% } else { %>
-                  <span><%= server.name.charAt(0).toUpperCase() %></span>
+                  <a class="btn btn-discord btn-sm" href="<%= server.inviteUrl %>" target="_blank" rel="noopener">
+                    Add Zyron
+                    <%- include('partials/icon', { name: 'external-link', size: 14 }) %>
+                  </a>
                 <% } %>
+                <a class="btn btn-ghost btn-sm" href="/server/<%= server.id %>">Open</a>
               </div>
-              <div class="server-meta">
-                <h3><%= server.name %></h3>
-                <p class="muted"><%= server.owner ? 'Server Owner' : 'Server Manager' %></p>
-              </div>
-            </div>
+            </article>
+          <% }); %>
+        </div>
+      <% } %>
+    </section>
 
-            <div class="server-status <%= server.hasBot ? 'online' : 'offline' %>">
-              <span class="dot"></span>
-              <%= server.hasBot ? 'Zyron is protecting this server' : 'Zyron is not in this server yet' %>
-            </div>
+    <section id="features" class="home-section">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Everything included</span>
+          <h2>Feature library</h2>
+          <p class="muted">Each feature lives in its own focused section inside a server.</p>
+        </div>
+        <span class="badge badge-muted">No premium · No add-ons</span>
+      </div>
 
-            <div class="server-actions">
-              <% if (server.hasBot) { %>
-                <a class="btn btn-primary btn-full" href="/server/<%= server.id %>">Configure</a>
-              <% } else { %>
-                <a class="btn btn-discord btn-full" href="<%= server.inviteUrl %>" target="_blank" rel="noopener">Add Bot to Server</a>
-              <% } %>
-            </div>
-          </article>
+      <div class="feature-card-grid">
+        <% featureLibrary.forEach(function (feature) { %>
+          <a class="feature-card glass" href="<%= primaryServerId ? '/server/' + primaryServerId + '?tab=' + feature.tab : '#servers' %>">
+            <span class="feature-card-icon"><%- include('partials/icon', { name: feature.icon, size: 22 }) %></span>
+            <span class="feature-card-badge"><%= feature.badge %></span>
+            <h3><%= feature.title %></h3>
+            <p><%= feature.description %></p>
+            <span class="feature-card-link">
+              <%= primaryServerId ? 'Configure' : 'Choose a server' %>
+              <%- include('partials/icon', { name: 'arrow-right', size: 14 }) %>
+            </span>
+          </a>
         <% }); %>
       </div>
+    </section>
 
-      <div class="empty card hidden" id="noResults">
-        <div class="empty-icon"><%- include('partials/icon', { name: 'search', size: 40 }) %></div>
-        <h3>No servers match your search</h3>
-        <p class="muted">Try a different name.</p>
+    <section id="status" class="home-section">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Live health</span>
+          <h2>System status</h2>
+          <p class="muted">A quick read on the services behind Zyron.</p>
+        </div>
       </div>
-    <% } %>
+
+      <div class="status-grid">
+        <div class="status-card glass">
+          <span class="status-icon green"><%- include('partials/icon', { name: 'bot', size: 18 }) %></span>
+          <div>
+            <small>Bot connection</small>
+            <strong><%= botGuildSource === 'api' ? 'Live API' : (botGuildSource === 'discord' ? 'Discord API' : 'Local database') %></strong>
+          </div>
+          <span class="status-dot<%= stats.withBot > 0 ? '' : ' offline' %>"></span>
+        </div>
+        <div class="status-card glass">
+          <span class="status-icon violet"><%- include('partials/icon', { name: 'wifi', size: 18 }) %></span>
+          <div>
+            <small>Bot API</small>
+            <strong><%= botApiOnline === null ? 'Local mode' : (botApiOnline ? 'Online' : 'Offline') %></strong>
+          </div>
+          <span class="status-dot<%= botApiOnline === false ? ' offline' : '' %>"></span>
+        </div>
+        <div class="status-card glass">
+          <span class="status-icon amber"><%- include('partials/icon', { name: 'brain', size: 18 }) %></span>
+          <div>
+            <small>AI Guard</small>
+            <strong><%= aiReady ? 'Ready' : 'Key missing' %></strong>
+          </div>
+          <span class="status-dot<%= aiReady ? '' : ' offline' %>"></span>
+        </div>
+        <div class="status-card glass">
+          <span class="status-icon blue"><%- include('partials/icon', { name: 'lock', size: 18 }) %></span>
+          <div>
+            <small>Panel publishing</small>
+            <strong><%= botTokenConfigured ? 'Available' : 'BOT_TOKEN needed' %></strong>
+          </div>
+          <span class="status-dot<%= botTokenConfigured ? '' : ' offline' %>"></span>
+        </div>
+      </div>
+    </section>
 
     <footer class="page-footer">
-      <span>Zyron <span class="dot" aria-hidden="true"></span> Powered by Zyra Nodes Limited</span>
-      <a href="<%= brand.invite %>" target="_blank" rel="noopener">Support</a>
+      <span>Zyron — a calmer way to run Discord.</span>
+      <span>Powered by <a href="<%= brand.invite %>" target="_blank" rel="noopener"><%= brand.company %></a></span>
     </footer>
   </main>
 
   <script>
     (function () {
-      var input = document.getElementById('serverSearch');
-      var grid = document.getElementById('serverGrid');
-      var empty = document.getElementById('noResults');
-      if (!input || !grid) return;
+      var links = Array.prototype.slice.call(document.querySelectorAll('.home-sidebar .nav-item[href*="#"]'));
+      var sections = ['overview', 'servers', 'features', 'status']
+        .map(function (id) { return document.getElementById(id); })
+        .filter(Boolean);
 
-      input.addEventListener('input', function () {
-        var query = input.value.toLowerCase().trim();
-        var cards = grid.querySelectorAll('.server-card');
-        var visible = 0;
+      function setActive(id) {
+        links.forEach(function (link) {
+          link.classList.toggle('active', link.getAttribute('href') === '/dashboard#' + id);
+        });
+      }
 
-        for (var i = 0; i < cards.length; i++) {
-          var card = cards[i];
-          var name = card.getAttribute('data-name') || '';
-          var match = !query || name.indexOf(query) !== -1;
-          card.style.display = match ? '' : 'none';
-          if (match) visible++;
-        }
-
-        if (empty) {
-          if (visible === 0) empty.classList.remove('hidden');
-          else empty.classList.add('hidden');
-        }
-      });
+      if ('IntersectionObserver' in window) {
+        var observer = new IntersectionObserver(function (entries) {
+          var visible = entries
+            .filter(function (entry) { return entry.isIntersecting; })
+            .sort(function (a, b) { return b.intersectionRatio - a.intersectionRatio; })[0];
+          if (visible) setActive(visible.target.id);
+        }, { rootMargin: '-15% 0px -55% 0px', threshold: [0.1, 0.3, 0.6] });
+        sections.forEach(function (section) { observer.observe(section); });
+      }
     })();
   </script>
 </body>

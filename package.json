@@ -1,0 +1,10 @@
+{
+  "name": "zyron-bot-root",
+  "version": "1.0.0",
+  "description": "Zyron Discord Bot",
+  "main": "bot/index.js",
+  "scripts": {
+    "postinstall": "cd bot && npm install",
+    "start": "cd bot && node index.js"
+  }
+}

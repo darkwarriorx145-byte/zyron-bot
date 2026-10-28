@@ -3,6 +3,8 @@ const https = require('https');
 const crypto = require('crypto');
 const { URL } = require('url');
 const db = require('../database/db');
+const appealUtil = require('../utils/appeal');
+const ticketAssistant = require('../utils/ticketAssistant');
 
 const API_KEY = process.env.BOT_API_KEY || process.env.ZYRON_API_KEY || '';
 const ENABLED = String(process.env.BOT_API_ENABLED || '').toLowerCase() === 'true' || Boolean(API_KEY);
@@ -123,6 +125,33 @@ function summarizeSettings(settings) {
     autoRoleId: settings.autoRoleId || null,
     autoRoleBotId: settings.autoRoleBotId || null,
     boosterRoleId: settings.boosterRoleId || null,
+    ticketCategory: settings.ticketCategory || null,
+    ticketLogChannel: settings.ticketLogChannel || null,
+    ticketStaffRole: settings.ticketStaffRole || null,
+    ticketStaffRoles: Array.isArray(settings.ticketStaffRoles) ? settings.ticketStaffRoles : [],
+    ticketNamePattern: settings.ticketNamePattern || 'ticket-{{ticket_number}}',
+    ticketAiEnabled: settings.ticketAiEnabled !== false,
+    ticketPanelChannel: settings.ticketPanelChannel || null,
+    ticketPanelTitle: settings.ticketPanelTitle || null,
+    ticketPanelDescription: settings.ticketPanelDescription || null,
+    ticketPanelFooter: settings.ticketPanelFooter || null,
+    ticketCreateLabel: settings.ticketCreateLabel || 'Create Ticket',
+    ticketCreateEmoji: settings.ticketCreateEmoji || '🎫',
+    ticketButtons: Array.isArray(settings.ticketButtons) ? settings.ticketButtons : [],
+    applicationChannel: settings.applicationChannel || null,
+    staffApplyAcceptRole: settings.staffApplyAcceptRole || null,
+    staffApplyAcceptRoles: Array.isArray(settings.staffApplyAcceptRoles) ? settings.staffApplyAcceptRoles : [],
+    appealInviteChannel: settings.appealInviteChannel || null,
+    warningKickThreshold: settings.warningKickThreshold || 5,
+    staffApplyPanelTitle: settings.staffApplyPanelTitle || null,
+    staffApplyPanelDescription: settings.staffApplyPanelDescription || null,
+    staffApplyPanelFooter: settings.staffApplyPanelFooter || null,
+    staffApplyButtonLabel: settings.staffApplyButtonLabel || 'Apply Now',
+    staffApplyButtonEmoji: settings.staffApplyButtonEmoji || '📝',
+    staffApplyModalTitle: settings.staffApplyModalTitle || 'Staff Application',
+    staffApplyAcceptMessage: settings.staffApplyAcceptMessage || null,
+    staffApplyDenyMessage: settings.staffApplyDenyMessage || null,
+    staffApplyQuestions: Array.isArray(settings.staffApplyQuestions) ? settings.staffApplyQuestions : [],
     features: settings.features || {}
   };
 }
@@ -150,6 +179,73 @@ function getGuildList() {
   });
 
   return list;
+}
+
+function cleanText(value, maxLength) {
+  if (value === null || value === undefined) return null;
+  return String(value).trim().slice(0, maxLength);
+}
+
+function cleanId(value) {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  if (!/^\d{5,25}$/.test(text)) return undefined;
+  return text;
+}
+
+function cleanIdList(list, limit) {
+  const ids = [];
+  if (!Array.isArray(list)) return ids;
+  list.slice(0, limit || 10).forEach(function (value) {
+    const id = cleanId(value);
+    if (id && ids.indexOf(id) === -1) ids.push(id);
+  });
+  return ids;
+}
+
+function sanitizeTicketButtons(list) {
+  const buttons = [];
+  if (!Array.isArray(list)) return buttons;
+
+  list.slice(0, 9).forEach(function (button) {
+    if (!button || typeof button !== 'object') return;
+    const label = cleanText(button.label, 80);
+    if (!label) return;
+    const style = ['primary', 'secondary', 'success', 'danger'].indexOf(button.style) !== -1 ? button.style : 'secondary';
+    buttons.push({
+      label: label,
+      emoji: cleanText(button.emoji, 64) || '🎫',
+      message: cleanText(button.message, 200) || 'Support request',
+      style: style
+    });
+  });
+
+  return buttons;
+}
+
+function sanitizeStaffQuestions(list) {
+  const questions = [];
+  if (!Array.isArray(list)) return questions;
+
+  list.slice(0, 5).forEach(function (question) {
+    if (!question || typeof question !== 'object') return;
+    const label = cleanText(question.label, 45);
+    if (!label) return;
+    const style = question.style === 'paragraph' ? 'paragraph' : 'short';
+    let maxLength = parseInt(question.maxLength, 10);
+    if (isNaN(maxLength)) maxLength = style === 'paragraph' ? 500 : 100;
+    maxLength = Math.max(1, Math.min(1000, maxLength));
+    questions.push({
+      label: label,
+      placeholder: cleanText(question.placeholder, 100) || '',
+      style: style,
+      required: question.required !== false,
+      maxLength: maxLength
+    });
+  });
+
+  return questions;
 }
 
 function sanitizeSettings(guildId, input) {
@@ -200,16 +296,78 @@ function sanitizeSettings(guildId, input) {
     if (!isNaN(invite)) updates.economyInvite = Math.max(0, Math.min(100000, invite));
   }
 
-  const idFields = ['logChannel', 'autoRoleId', 'autoRoleBotId', 'boosterRoleId'];
+  const idFields = [
+    'logChannel',
+    'autoRoleId',
+    'autoRoleBotId',
+    'boosterRoleId',
+    'ticketCategory',
+    'ticketLogChannel',
+    'ticketStaffRole',
+    'ticketPanelChannel',
+    'applicationChannel',
+    'staffApplyAcceptRole',
+    'appealInviteChannel'
+  ];
   idFields.forEach(function (field) {
     if (body[field] === undefined) return;
-    const value = body[field] === null ? '' : String(body[field]).trim();
-    if (!value) {
-      updates[field] = null;
-    } else if (/^\d{5,25}$/.test(value)) {
-      updates[field] = value;
-    }
+    const value = cleanId(body[field]);
+    if (value === undefined) return;
+    updates[field] = value;
   });
+
+  const ticketTextFields = {
+    ticketPanelTitle: 120,
+    ticketPanelDescription: 4000,
+    ticketPanelFooter: 300,
+    ticketCreateLabel: 80,
+    ticketCreateEmoji: 64
+  };
+  Object.keys(ticketTextFields).forEach(function (field) {
+    if (body[field] !== undefined) updates[field] = cleanText(body[field], ticketTextFields[field]);
+  });
+
+  if (Array.isArray(body.ticketButtons)) {
+    updates.ticketButtons = sanitizeTicketButtons(body.ticketButtons);
+  }
+
+  if (body.ticketAiEnabled !== undefined) updates.ticketAiEnabled = Boolean(body.ticketAiEnabled);
+
+  if (typeof body.ticketNamePattern === 'string') {
+    const pattern = body.ticketNamePattern.trim().slice(0, 100);
+    updates.ticketNamePattern = pattern || 'ticket-{{ticket_number}}';
+  }
+
+  if (Array.isArray(body.ticketStaffRoles)) {
+    updates.ticketStaffRoles = cleanIdList(body.ticketStaffRoles, 10);
+  }
+
+  if (Array.isArray(body.staffApplyAcceptRoles)) {
+    updates.staffApplyAcceptRoles = cleanIdList(body.staffApplyAcceptRoles, 10);
+  }
+
+  if (body.warningKickThreshold !== undefined) {
+    const threshold = parseInt(body.warningKickThreshold, 10);
+    if (!isNaN(threshold)) updates.warningKickThreshold = Math.max(1, Math.min(20, threshold));
+  }
+
+  const staffTextFields = {
+    staffApplyPanelTitle: 120,
+    staffApplyPanelDescription: 4000,
+    staffApplyPanelFooter: 300,
+    staffApplyButtonLabel: 80,
+    staffApplyButtonEmoji: 64,
+    staffApplyModalTitle: 45,
+    staffApplyAcceptMessage: 1000,
+    staffApplyDenyMessage: 1000
+  };
+  Object.keys(staffTextFields).forEach(function (field) {
+    if (body[field] !== undefined) updates[field] = cleanText(body[field], staffTextFields[field]);
+  });
+
+  if (Array.isArray(body.staffApplyQuestions)) {
+    updates.staffApplyQuestions = sanitizeStaffQuestions(body.staffApplyQuestions);
+  }
 
   if (body.features && typeof body.features === 'object') {
     const features = Object.assign({}, current.features || {});
@@ -222,6 +380,185 @@ function sanitizeSettings(guildId, input) {
   }
 
   return updates;
+}
+
+function userLabel(userId) {
+  if (!userId) return 'Unknown';
+  if (botClient && botClient.users && botClient.users.cache) {
+    const user = botClient.users.cache.get(userId);
+    if (user) return user.tag || user.username || userId;
+  }
+  return String(userId);
+}
+
+function closedByStats(tickets) {
+  const counts = {};
+  tickets.forEach(function (ticket) {
+    if (ticket.status !== 'closed' || !ticket.closedBy) return;
+    if (!counts[ticket.closedBy]) counts[ticket.closedBy] = 0;
+    counts[ticket.closedBy]++;
+  });
+  return Object.keys(counts).map(function (userId) {
+    return { userId: userId, name: userLabel(userId), count: counts[userId] };
+  }).sort(function (a, b) {
+    return b.count - a.count;
+  });
+}
+
+function activityPayload(guildId) {
+  const tickets = db.getTickets(guildId).slice().sort(function (a, b) {
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+  const applications = db.getStaffApplications(guildId).slice().sort(function (a, b) {
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+  const appeals = db.getAppeals(guildId).slice().sort(function (a, b) {
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+
+  const ticketStats = {
+    total: tickets.length,
+    open: tickets.filter(function (ticket) { return ticket.status === 'open'; }).length,
+    closed: tickets.filter(function (ticket) { return ticket.status === 'closed'; }).length,
+    closedBy: closedByStats(tickets)
+  };
+
+  const staffStats = {
+    total: applications.length,
+    pending: applications.filter(function (app) { return app.status === 'pending'; }).length,
+    accepted: applications.filter(function (app) { return app.status === 'accepted'; }).length,
+    denied: applications.filter(function (app) { return app.status === 'denied'; }).length,
+    reviewedBy: (function () {
+      const counts = {};
+      applications.forEach(function (app) {
+        if (!app.reviewedBy) return;
+        if (!counts[app.reviewedBy]) counts[app.reviewedBy] = 0;
+        counts[app.reviewedBy]++;
+      });
+      return Object.keys(counts).map(function (userId) {
+        return { userId: userId, name: userLabel(userId), count: counts[userId] };
+      }).sort(function (a, b) { return b.count - a.count; });
+    })()
+  };
+
+  const appealStats = {
+    total: appeals.length,
+    pending: appeals.filter(function (appeal) { return appeal.status === 'pending'; }).length,
+    approved: appeals.filter(function (appeal) { return appeal.status === 'approved'; }).length,
+    denied: appeals.filter(function (appeal) { return appeal.status === 'denied'; }).length
+  };
+
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const recentCloses = {};
+  tickets.forEach(function (ticket) {
+    if (ticket.status !== 'closed' || !ticket.closedBy) return;
+    if ((ticket.closedAt || 0) < cutoff) return;
+    if (!recentCloses[ticket.closedBy]) recentCloses[ticket.closedBy] = 0;
+    recentCloses[ticket.closedBy]++;
+  });
+
+  const advice = closedByStats(tickets).slice(0, 8).map(function (row) {
+    const closes = recentCloses[row.userId] || 0;
+    if (closes >= 3) {
+      return {
+        userId: row.userId,
+        name: row.name,
+        closes: closes,
+        action: 'promote',
+        reason: 'they closed ' + closes + ' tickets in the last 30 days'
+      };
+    }
+    if (closes === 0) {
+      return {
+        userId: row.userId,
+        name: row.name,
+        closes: 0,
+        action: 'demote',
+        reason: 'they have not closed a ticket in the last 30 days'
+      };
+    }
+    return {
+      userId: row.userId,
+      name: row.name,
+      closes: closes,
+      action: 'keep',
+      reason: 'they are closing tickets steadily'
+    };
+  });
+
+  return {
+    tickets: tickets.slice(0, 25),
+    staffApplications: applications.slice(0, 25),
+    appeals: appeals.slice(0, 25),
+    ticketStats: ticketStats,
+    staffStats: staffStats,
+    appealStats: appealStats,
+    staffAdvice: advice
+  };
+}
+
+async function staffRoleAction(guild, settings, body) {
+  const action = String(body.action || '').toLowerCase();
+  if (['promote', 'demote', 'remove'].indexOf(action) === -1) {
+    throw new Error('Invalid staff action.');
+  }
+
+  const userId = cleanId(body.userId);
+  if (!userId) throw new Error('A valid member ID is required.');
+
+  const member = await guild.members.fetch(userId).catch(function () {
+    return null;
+  });
+  if (!member) throw new Error('That member is not in this server.');
+
+  const roleIds = [];
+  if (action === 'remove') {
+    ticketAssistant.roleIds(settings).forEach(function (roleId) {
+      if (roleIds.indexOf(roleId) === -1) roleIds.push(roleId);
+    });
+  } else {
+    const roleId = cleanId(body.roleId);
+    if (!roleId) throw new Error('A valid role ID is required.');
+    const role = guild.roles.cache.get(roleId) || await guild.roles.fetch(roleId).catch(function () {
+      return null;
+    });
+    if (!role) throw new Error('That role was not found.');
+    roleIds.push(role.id);
+  }
+
+  const changed = [];
+  for (let i = 0; i < roleIds.length; i++) {
+    const role = guild.roles.cache.get(roleIds[i]);
+    if (!role || !role.editable) continue;
+    if (action === 'promote') {
+      await member.roles.add(role, 'Staff review: promoted').catch(function () {});
+      changed.push(role.name);
+    } else {
+      await member.roles.remove(role, 'Staff review: demoted').catch(function () {});
+      changed.push(role.name);
+    }
+  }
+
+  const logId = settings.logChannel || settings.ticketLogChannel || guild.systemChannelId;
+  const channel = logId ? guild.channels.cache.get(logId) : null;
+  if (channel) {
+    const { EmbedBuilder } = require('discord.js');
+    channel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(action === 'promote' ? 0x57F287 : 0xFEE75C)
+          .setTitle(action === 'promote' ? 'Staff Promoted' : (action === 'remove' ? 'Staff Removed' : 'Staff Demoted'))
+          .setDescription(
+            (action === 'promote' ? 'Promoted ' : (action === 'remove' ? 'Removed ' : 'Demoted ')) +
+            member + (changed.length ? ' with ' + changed.join(', ') : '') + '.' +
+            (action === 'promote' ? '\n\nWell done! Keep helping the community.' : '')
+          )
+          .setTimestamp()
+      ]
+    }).catch(function () {});
+  }
+
+  return { memberId: member.id, action: action, roles: changed };
 }
 
 function statusPayload() {
@@ -307,6 +644,78 @@ async function handle(req, res) {
       dbPath: 'bot-managed',
       bot: statusPayload()
     });
+  }
+
+  const activityMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/activity$/);
+  if (activityMatch) {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guildId = activityMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId)
+      : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    return json(res, 200, { ok: true, activity: activityPayload(guildId) });
+  }
+
+  const appealMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/appeals\/([A-Za-z0-9]+)\/review$/);
+  if (appealMatch) {
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guildId = appealMatch[1];
+    const caseId = appealMatch[2];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId)
+      : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    let body = {};
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+
+    if (['approve', 'deny'].indexOf(String(body.action || '').toLowerCase()) === -1) {
+      return json(res, 400, { ok: false, error: 'Action must be approve or deny.' });
+    }
+
+    try {
+      const settings = db.getGuild(guildId);
+      const appeal = await appealUtil.reviewAppeal(
+        guild,
+        settings,
+        caseId,
+        String(body.action).toLowerCase(),
+        body.reviewerId ? String(body.reviewerId) : null
+      );
+      return json(res, 200, { ok: true, appeal: appeal });
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+  }
+
+  const staffActionMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/staff\/action$/);
+  if (staffActionMatch) {
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guildId = staffActionMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId)
+      : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    let body = {};
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+
+    try {
+      const settings = db.getGuild(guildId);
+      const result = await staffRoleAction(guild, settings, body);
+      return json(res, 200, { ok: true, result: result });
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
   }
 
   const match = pathname.match(/^\/api\/guilds\/(\d{5,25})\/settings$/);

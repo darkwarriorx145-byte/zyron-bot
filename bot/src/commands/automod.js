@@ -23,7 +23,9 @@ const SUBCOMMANDS = [
 ];
 
 function flag(value) {
-  return value ? '🟢 **ON**' : '🔴 **OFF**';
+  return value
+    ? ZyronEmbedBuilder.emoji('success') + ' **ON**'
+    : ZyronEmbedBuilder.emoji('error') + ' **OFF**';
 }
 
 async function nativeRuleCount(guild) {
@@ -55,10 +57,9 @@ module.exports = {
 
       return message.channel.send({
         embeds: [
-          new EmbedBuilder()
-            .setColor(config.colors.primary)
-            .setTitle('🤖 AutoMod & Anti-Abuse Panel')
-            .setDescription(
+          ZyronEmbedBuilder.base({
+            title: ZyronEmbedBuilder.emoji('ai') + ' AutoMod & Anti-Abuse Panel',
+            description:
               '**Native AutoMod:** ' + flag(settings.features.autoMod) + '\n' +
               '**Profanity Filter (EN + HI):** ' + flag(settings.features.antiAbuse) + '\n' +
               '**Anti Spam (mute):** ' + flag(settings.features.antiSpam) + '\n' +
@@ -74,9 +75,7 @@ module.exports = {
               '**' + prefix + 'automod abuse on** — toggle profanity filter\n' +
               '**' + prefix + 'automod test <text>** — test the filter\n' +
               '**' + prefix + 'automod punishment ban** — set repeat punishment'
-            )
-            .setFooter({ text: config.botName + ' • Powered by ' + config.company })
-            .setTimestamp()
+          })
         ]
       });
     }

@@ -1,0 +1,9 @@
+run = "npm start"
+entrypoint = "bot/index.js"
+
+[deployment]
+run = ["sh", "-c", "npm start"]
+deploymentTarget = "cloudrun"
+
+[nix]
+channel = "stable-24.05"

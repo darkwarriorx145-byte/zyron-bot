@@ -8,488 +8,1760 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/glass-core.css">
+  <link rel="stylesheet" href="/css/glass-server.css">
+  <link rel="stylesheet" href="/css/glass-responsive.css">
 </head>
-<body class="app">
-  <aside class="sidebar">
-    <a class="brand" href="/dashboard">
-      <span class="brand-mark"><%- include('partials/icon', { name: 'shield', size: 22 }) %></span>
-      <span class="brand-text">
-        <strong>Zyron</strong>
-        <small>Control Center</small>
-      </span>
-    </a>
+<%
+  function safeJson(value) {
+    return JSON.stringify(value)
+      .replace(/</g, '\\u003c')
+      .replace(/>/g, '\\u003e')
+      .replace(/&/g, '\\u0026');
+  }
+  var featureEnabledCount = Object.keys(settings.features || {}).filter(function (key) {
+    return settings.features[key];
+  }).length;
+  var securityFeatures = featureCatalog.filter(function (feature) { return feature.group === 'security'; });
+  var chatFeatures = featureCatalog.filter(function (feature) { return feature.group === 'chat'; });
+  var recoveryFeatures = featureCatalog.filter(function (feature) { return feature.group === 'recovery'; });
+%>
+<body class="app server-page">
+  <%- include('partials/notch', { notchLabel: serverName, notchMeta: 'Server control room' }) %>
+  <%- include('partials/server-sidebar', { activeTab: initialTab }) %>
 
-    <nav class="nav">
-      <a class="nav-item" href="/dashboard">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'arrow-left', size: 18 }) %></span>
-        <span>All Servers</span>
-      </a>
-      <a class="nav-item active" href="/server/<%= serverId %>">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'settings', size: 18 }) %></span>
-        <span>Server Settings</span>
-      </a>
-      <% if (user.isMainAdmin) { %>
-        <a class="nav-item" href="/admin">
-          <span class="nav-icon"><%- include('partials/icon', { name: 'crown', size: 18 }) %></span>
-          <span>Admin Panel</span>
-        </a>
-      <% } %>
-      <a class="nav-item" href="/link-test">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'globe', size: 18 }) %></span>
-        <span>Link Test</span>
-      </a>
-      <a class="nav-item" href="<%= brand.invite %>" target="_blank" rel="noopener">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'message-circle', size: 18 }) %></span>
-        <span>Support Server</span>
-      </a>
-      <a class="nav-item" href="/logout">
-        <span class="nav-icon"><%- include('partials/icon', { name: 'log-out', size: 18 }) %></span>
-        <span>Logout</span>
-      </a>
-    </nav>
-
-    <div class="sidebar-spacer"></div>
-
-    <div class="sidebar-user">
-      <img class="avatar avatar-sm" src="<%= user.avatarUrl %>" alt="">
-      <div class="sidebar-user-meta">
-        <strong><%= user.displayName %></strong>
-        <small>@<%= user.username %></small>
-      </div>
-    </div>
-
-    <div class="sidebar-footer">
-      <span class="status-dot"></span>
-      <span>Powered by Zyra Nodes Limited</span>
-    </div>
-  </aside>
-
-  <main class="main">
-    <header class="topbar">
-      <div class="topbar-server">
-        <div class="server-icon server-icon-lg">
-          <% if (serverIcon) { %>
-            <img src="<%= serverIcon %>" alt="">
-          <% } else { %>
-            <span><%= serverName.charAt(0).toUpperCase() %></span>
+  <main class="main server-main">
+    <header class="server-topbar">
+      <div class="server-topbar-title">
+        <span class="eyebrow">Server control room</span>
+        <h1><%= serverName %></h1>
+        <div class="server-topbar-meta">
+          <span class="status-dot"></span>
+          <span>Zyron connected</span>
+          <span class="dot-sep">·</span>
+          <span>Prefix <code><%= settings.prefix %></code></span>
+          <% if (botApiOnline === false) { %>
+            <span class="dot-sep">·</span>
+            <span class="text-warn">Bot API offline — using local DB</span>
           <% } %>
-        </div>
-        <div>
-          <p class="eyebrow">Server Settings</p>
-          <h1><%= serverName %></h1>
-          <p class="muted"><span class="status-dot"></span> Zyron is online in this server</p>
         </div>
       </div>
       <div class="topbar-actions">
-        <button class="btn btn-primary" id="saveTop" type="button">Save Changes</button>
+        <span id="saveStatus" class="save-status">All changes saved</span>
+        <button type="button" class="btn btn-ghost" data-save>
+          <%- include('partials/icon', { name: 'save', size: 16 }) %>
+          Save
+        </button>
+        <a class="btn btn-ghost" href="/dashboard">Exit</a>
       </div>
     </header>
 
-    <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-    <% if (typeof botApiOnline !== 'undefined' && botApiOnline === false) { %>
-      <div class="alert alert-warning">
-        <span class="alert-icon"><%- include('partials/icon', { name: 'wifi-off', size: 18 }) %></span>
-        <div>
-          <strong>Bot API is offline.</strong>
-          <p class="muted">You are viewing the last settings saved in the local bot database. Start the bot or check <strong>BOT_API_URL</strong> and <strong>BOT_API_KEY</strong> before saving changes.</p>
+    <form id="settingsForm" class="settings-form" autocomplete="off" novalidate>
+      <section class="panel active" data-panel="overview" id="panel-overview">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">At a glance</span>
+            <h2>Overview</h2>
+            <p class="muted">A clean pulse on protection, community tools and the settings behind them.</p>
+          </div>
+          <span class="badge badge-success"><%= featureEnabledCount %> guards active</span>
         </div>
-      </div>
-    <% } %>
 
-    <form id="settingsForm" autocomplete="off">
-      <section class="card">
-        <div class="card-head">
-          <div class="card-title">
-            <span class="card-icon"><%- include('partials/icon', { name: 'brain', size: 18 }) %></span>
+        <div class="overview-hero glass">
+          <div class="overview-hero-main">
+            <span class="server-avatar xlarge">
+              <% if (serverIcon) { %>
+                <img src="<%= serverIcon %>" alt="">
+              <% } else { %>
+                <%- include('partials/icon', { name: 'server', size: 30 }) %>
+              <% } %>
+            </span>
             <div>
-              <h2>AI Security Engine</h2>
-              <p class="muted">OpenRouter confirms nukes, raids and abusive messages before Zyron acts.</p>
+              <span class="eyebrow">Workspace</span>
+              <h2><%= serverName %></h2>
+              <p class="muted">Every change below is stored only for this server.</p>
             </div>
           </div>
-          <span class="badge <%= aiReady ? 'badge-success' : 'badge-warning' %>"><%= aiReady ? 'Key set' : 'Key missing' %></span>
+          <div class="overview-hero-stats">
+            <div class="mini-stat"><strong><%= featureEnabledCount %></strong><small>Active guards</small></div>
+            <div class="mini-stat"><strong><%= settings.ticketButtons.length %></strong><small>Ticket buttons</small></div>
+            <div class="mini-stat"><strong><%= settings.staffApplyQuestions.length %></strong><small>Application questions</small></div>
+            <div class="mini-stat"><strong><%= settings.economyDaily %></strong><small>Daily coins</small></div>
+          </div>
         </div>
 
-        <div class="setting-row">
-          <div class="setting-copy">
-            <strong>Enable AI second opinion</strong>
-            <small>When off, only the deterministic Zyron rules decide.</small>
-          </div>
-          <label class="switch">
-            <input type="checkbox" id="aiEnabled" <%= settings.aiEnabled !== false ? 'checked' : '' %>>
-            <span class="slider"></span>
-          </label>
+        <div class="status-tile-grid">
+          <button type="button" class="status-tile glass" data-jump="antinuke">
+            <span class="status-tile-icon blue"><%- include('partials/icon', { name: 'shield-check', size: 20 }) %></span>
+            <span class="status-tile-copy">
+              <small>Anti-Nuke</small>
+              <strong><%= settings.antiNukeEnabled ? 'Enabled' : 'Disabled' %></strong>
+            </span>
+            <span class="badge <%= settings.antiNukeEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.antiNukeEnabled ? 'Live' : 'Off' %></span>
+          </button>
+          <button type="button" class="status-tile glass" data-jump="antiraid">
+            <span class="status-tile-icon violet"><%- include('partials/icon', { name: 'zap', size: 20 }) %></span>
+            <span class="status-tile-copy">
+              <small>Anti-Raid</small>
+              <strong><%= settings.features.antiRaid ? 'Watching joins' : 'Disabled' %></strong>
+            </span>
+            <span class="badge <%= settings.features.antiRaid ? 'badge-success' : 'badge-muted' %>"><%= settings.features.antiRaid ? 'Live' : 'Off' %></span>
+          </button>
+          <button type="button" class="status-tile glass" data-jump="ai">
+            <span class="status-tile-icon amber"><%- include('partials/icon', { name: 'brain', size: 20 }) %></span>
+            <span class="status-tile-copy">
+              <small>AI Guard</small>
+              <strong><%= settings.aiEnabled ? 'Second opinion' : 'Disabled' %></strong>
+            </span>
+            <span class="badge <%= settings.aiEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.aiEnabled ? 'Ready' : 'Off' %></span>
+          </button>
+          <button type="button" class="status-tile glass" data-jump="tickets">
+            <span class="status-tile-icon green"><%- include('partials/icon', { name: 'ticket', size: 20 }) %></span>
+            <span class="status-tile-copy">
+              <small>Tickets</small>
+              <strong><%= settings.ticketPanelChannel ? 'Panel connected' : 'Panel not sent' %></strong>
+            </span>
+            <span class="badge <%= settings.ticketPanelChannel ? 'badge-success' : 'badge-muted' %>"><%= settings.ticketPanelChannel ? 'Ready' : 'Setup' %></span>
+          </button>
         </div>
 
-        <div class="setting-row">
-          <div class="setting-copy">
-            <strong>Scan risky messages</strong>
-            <small>Send threat, doxxing, scam and NSFW signals to the AI even when keywords miss.</small>
+        <div class="overview-grid">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'sliders', size: 18 }) %></span>
+                <div>
+                  <h3>Response policy</h3>
+                  <p class="muted">How Zyron reacts when a guard confirms a threat.</p>
+                </div>
+              </div>
+            </div>
+            <div class="policy-grid">
+              <div class="policy-item"><span>Anti-Nuke punishment</span><strong><%= settings.punishment %></strong></div>
+              <div class="policy-item"><span>Raid punishment</span><strong><%= settings.raidPunishment %></strong></div>
+              <div class="policy-item"><span>Prefix</span><strong><code><%= settings.prefix %></code></strong></div>
+              <div class="policy-item"><span>Log channel</span><strong><%= settings.logChannel ? '#' + settings.logChannel : 'Auto-created' %></strong></div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" data-jump="settings">Edit response policy</button>
           </div>
-          <label class="switch">
-            <input type="checkbox" id="aiScanMessages" <%= settings.aiScanMessages !== false ? 'checked' : '' %>>
-            <span class="slider"></span>
-          </label>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'sparkles', size: 18 }) %></span>
+                <div>
+                  <h3>Quick actions</h3>
+                  <p class="muted">Jump straight into the part of the server you want to tune.</p>
+                </div>
+              </div>
+            </div>
+            <div class="quick-actions">
+              <button type="button" class="quick-action" data-jump="tickets"><%- include('partials/icon', { name: 'ticket', size: 16 }) %> Design ticket panel</button>
+              <button type="button" class="quick-action" data-jump="staff"><%- include('partials/icon', { name: 'user-check', size: 16 }) %> Staff application questions</button>
+              <button type="button" class="quick-action" data-jump="ai"><%- include('partials/icon', { name: 'brain', size: 16 }) %> Test AI Guard</button>
+              <button type="button" class="quick-action" data-jump="giveaways"><%- include('partials/icon', { name: 'gift', size: 16 }) %> Giveaway commands</button>
+            </div>
+          </div>
         </div>
 
-        <div class="form-grid">
-          <label class="field">
-            <span>Model</span>
-            <input class="input" id="aiModel" type="text" value="<%= settings.aiModel || '' %>" placeholder="<%= defaultModel %>" maxlength="100">
-            <small class="field-hint">Leave blank to use the bot default. Example: openrouter/auto</small>
-          </label>
-
-          <label class="field">
-            <span>When AI confirms a threat</span>
-            <select class="input" id="aiAction">
-              <option value="auto" <%= settings.aiAction === 'auto' ? 'selected' : '' %>>Use Zyron rules (auto)</option>
-              <option value="ban" <%= settings.aiAction === 'ban' ? 'selected' : '' %>>Ban the offender</option>
-              <option value="kick" <%= settings.aiAction === 'kick' ? 'selected' : '' %>>Kick the offender</option>
-              <option value="timeout" <%= settings.aiAction === 'timeout' ? 'selected' : '' %>>Timeout for 60 minutes</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="field">
-          <div class="range-head">
-            <span>AI confidence threshold</span>
-            <strong id="aiConfidenceValue"><%= Math.round((settings.aiConfidence || 0.6) * 100) %>%</strong>
+        <div class="notice glass">
+          <span class="notice-icon"><%- include('partials/icon', { name: 'shield', size: 18 }) %></span>
+          <div>
+            <strong>The main owner and main admin are protected.</strong>
+            <p>Zyron will never automatically punish or moderate those protected IDs, even if a guard thinks they are hostile.</p>
           </div>
-          <input class="range" id="aiConfidence" type="range" min="0.3" max="0.95" step="0.05" value="<%= settings.aiConfidence || 0.6 %>">
-          <small class="field-hint">The AI must be at least this confident before it clears or overrides a punishment.</small>
-        </div>
-
-        <div class="ai-test">
-          <div class="ai-test-head">
-            <strong>Test the AI</strong>
-            <small>Nothing is punished. This only shows the verdict.</small>
-          </div>
-          <div class="ai-test-row">
-            <input class="input" id="aiTestText" type="text" placeholder="Paste a message to classify..." maxlength="1200">
-            <button class="btn btn-ghost" id="aiTestBtn" type="button">Run Test</button>
-          </div>
-          <small class="field-hint">openrouter/auto needs credits. Free fallback models are used automatically. A rate-limit error means the daily free quota is used up.</small>
-          <div class="ai-result hidden" id="aiTestResult"></div>
         </div>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <div class="card-title">
-            <span class="card-icon"><%- include('partials/icon', { name: 'shield', size: 18 }) %></span>
-            <div>
-              <h2>Core Protection</h2>
-              <p class="muted">Master switches and the default punishment for destructive actions.</p>
+      <section class="panel" data-panel="antinuke" id="panel-antinuke">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Protection</span>
+            <h2>Anti-Nuke</h2>
+            <p class="muted">Stop destructive staff actions before they become a server-wide disaster.</p>
+          </div>
+          <span class="badge <%= settings.antiNukeEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.antiNukeEnabled ? 'Armed' : 'Disarmed' %></span>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'shield-check', size: 18 }) %></span>
+                <div>
+                  <h3>Master switch</h3>
+                  <p class="muted">Anti-Nuke reverts unauthorized actions and logs the evidence.</p>
+                </div>
+              </div>
+            </div>
+            <label class="switch-row">
+              <span>
+                <strong>Enable Anti-Nuke</strong>
+                <small>Recommended for every server.</small>
+              </span>
+              <span class="switch"><input id="antiNukeEnabled" type="checkbox" <%= settings.antiNukeEnabled ? 'checked' : '' %>><span class="switch-track"></span></span>
+            </label>
+            <label class="field">
+              <span>Punishment for confirmed nukers</span>
+              <select class="input" id="punishment">
+                <option value="ban" <%= settings.punishment === 'ban' ? 'selected' : '' %>>Ban</option>
+                <option value="kick" <%= settings.punishment === 'kick' ? 'selected' : '' %>>Kick</option>
+                <option value="mute" <%= settings.punishment === 'mute' ? 'selected' : '' %>>Mute</option>
+              </select>
+              <small class="field-hint">Every punishment includes the detected reason in the server logs.</small>
+            </label>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'lock', size: 18 }) %></span>
+                <div>
+                  <h3>Protected by default</h3>
+                  <p class="muted">Your main owner and main admin are always exempt.</p>
+                </div>
+              </div>
+            </div>
+            <div class="callout-list">
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Main owner bypass</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Main admin bypass</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Reasons attached to every action</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Private <code>#zyron-logs</code></span>
             </div>
           </div>
         </div>
 
-        <div class="setting-row">
-          <div class="setting-copy">
-            <strong>Anti-Nuke protection</strong>
-            <small>Blocks and reverts unauthorized destructive actions.</small>
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'layers', size: 18 }) %></span>
+              <div>
+                <h3>Guard modules</h3>
+                <p class="muted">Toggle each destructive action individually. All are included.</p>
+              </div>
+            </div>
+            <span class="badge badge-muted"><%= securityFeatures.length %> modules</span>
           </div>
-          <label class="switch">
-            <input type="checkbox" id="antiNukeEnabled" <%= settings.antiNukeEnabled !== false ? 'checked' : '' %>>
-            <span class="slider"></span>
-          </label>
-        </div>
-
-        <div class="form-grid">
-          <label class="field">
-            <span>Bot prefix</span>
-            <input class="input" id="prefix" type="text" value="<%= settings.prefix %>" maxlength="5">
-            <small class="field-hint">The character used before commands, for example .</small>
-          </label>
-
-          <label class="field">
-            <span>Punishment for nukers</span>
-            <select class="input" id="punishment">
-              <option value="ban" <%= settings.punishment === 'ban' ? 'selected' : '' %>>Ban</option>
-              <option value="kick" <%= settings.punishment === 'kick' ? 'selected' : '' %>>Kick</option>
-              <option value="mute" <%= settings.punishment === 'mute' ? 'selected' : '' %>>Timeout (28 days)</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Punishment for raiders</span>
-            <select class="input" id="raidPunishment">
-              <option value="kick" <%= settings.raidPunishment === 'kick' ? 'selected' : '' %>>Kick</option>
-              <option value="ban" <%= settings.raidPunishment === 'ban' ? 'selected' : '' %>>Ban</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span>Private log channel ID</span>
-            <input class="input" id="logChannel" type="text" value="<%= settings.logChannel || '' %>" placeholder="Leave blank to auto-create zyron-logs" maxlength="25">
-            <small class="field-hint">Zyron creates a private zyron-logs channel automatically.</small>
-          </label>
+          <div class="feature-toggle-grid">
+            <% securityFeatures.forEach(function (feature) { %>
+              <label class="feature-toggle-row">
+                <span class="feature-toggle-copy">
+                  <strong><%= feature.label %></strong>
+                  <small><%= feature.description %></small>
+                </span>
+                <span class="switch"><input class="feature-toggle" data-feature="<%= feature.key %>" type="checkbox" <%= settings.features[feature.key] ? 'checked' : '' %>><span class="switch-track"></span></span>
+              </label>
+            <% }); %>
+          </div>
         </div>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <div class="card-title">
-            <span class="card-icon"><%- include('partials/icon', { name: 'palette', size: 18 }) %></span>
-            <div>
-              <h2>Auto Roles</h2>
-              <p class="muted">Roles assigned automatically when members, bots or boosters join.</p>
+      <section class="panel" data-panel="antiraid" id="panel-antiraid">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Protection</span>
+            <h2>Anti-Raid</h2>
+            <p class="muted">Catch join floods, lock the gates and recover what the raiders touched.</p>
+          </div>
+          <span class="badge <%= settings.features.antiRaid ? 'badge-success' : 'badge-muted' %>"><%= settings.features.antiRaid ? 'Watching' : 'Off' %></span>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'zap', size: 18 }) %></span>
+                <div>
+                  <h3>Raid response</h3>
+                  <p class="muted">Choose how new raiders are handled when the join pattern is confirmed.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Raid punishment</span>
+              <select class="input" id="raidPunishment">
+                <option value="kick" <%= settings.raidPunishment === 'kick' ? 'selected' : '' %>>Kick (default)</option>
+                <option value="ban" <%= settings.raidPunishment === 'ban' ? 'selected' : '' %>>Ban</option>
+              </select>
+              <small class="field-hint">Kick is the safer default. Ban is available when the raid is clearly hostile.</small>
+            </label>
+            <div class="callout-list">
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Join-rate detection</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Automatic lockdown</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Channel recovery after a raid</span>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'activity', size: 18 }) %></span>
+                <div>
+                  <h3>Recovery</h3>
+                  <p class="muted">Bring back channels and stop trusted users from betraying the server.</p>
+                </div>
+              </div>
+            </div>
+            <div class="callout-list">
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Anti-Betrayal only acts on destructive actions, never words</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Anti-Channel Recovery restores nuked channels</span>
             </div>
           </div>
         </div>
 
-        <div class="form-grid">
-          <label class="field">
-            <span>Member auto role ID</span>
-            <input class="input" id="autoRoleId" type="text" value="<%= settings.autoRoleId || '' %>" placeholder="Role ID" maxlength="25">
-          </label>
-
-          <label class="field">
-            <span>Bot auto role ID</span>
-            <input class="input" id="autoRoleBotId" type="text" value="<%= settings.autoRoleBotId || '' %>" placeholder="Role ID" maxlength="25">
-          </label>
-
-          <label class="field">
-            <span>Booster auto role ID</span>
-            <input class="input" id="boosterRoleId" type="text" value="<%= settings.boosterRoleId || '' %>" placeholder="Role ID" maxlength="25">
-          </label>
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'shield', size: 18 }) %></span>
+              <div>
+                <h3>Raid & recovery modules</h3>
+                <p class="muted">Keep the whole response chain enabled for the best coverage.</p>
+              </div>
+            </div>
+          </div>
+          <div class="feature-toggle-grid">
+            <% recoveryFeatures.forEach(function (feature) { %>
+              <label class="feature-toggle-row">
+                <span class="feature-toggle-copy">
+                  <strong><%= feature.label %></strong>
+                  <small><%= feature.description %></small>
+                </span>
+                <span class="switch"><input class="feature-toggle" data-feature="<%= feature.key %>" type="checkbox" <%= settings.features[feature.key] ? 'checked' : '' %>><span class="switch-track"></span></span>
+              </label>
+            <% }); %>
+          </div>
         </div>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <div class="card-title">
-            <span class="card-icon"><%- include('partials/icon', { name: 'coins', size: 18 }) %></span>
-            <div>
-              <h2>Economy</h2>
-              <p class="muted">Server-specific coin rewards. Every server has its own economy.</p>
+      <section class="panel" data-panel="ai" id="panel-ai">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Intelligence</span>
+            <h2>AI Guard</h2>
+            <p class="muted">A second opinion before Zyron punishes. The bot still asks for confirmation before a ban or timeout.</p>
+          </div>
+          <span class="badge <%= settings.aiEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.aiEnabled ? 'Ready' : 'Off' %></span>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'brain', size: 18 }) %></span>
+                <div>
+                  <h3>AI behaviour</h3>
+                  <p class="muted">Tune how confidently the AI must be before it acts.</p>
+                </div>
+              </div>
             </div>
+            <label class="switch-row">
+              <span><strong>Enable AI Guard</strong><small>Use OpenRouter for a second opinion.</small></span>
+              <span class="switch"><input id="aiEnabled" type="checkbox" <%= settings.aiEnabled ? 'checked' : '' %>><span class="switch-track"></span></span>
+            </label>
+            <label class="switch-row">
+              <span><strong>Scan chat messages</strong><small>Check abuse, threats and scams, not only nukes.</small></span>
+              <span class="switch"><input id="aiScanMessages" type="checkbox" <%= settings.aiScanMessages ? 'checked' : '' %>><span class="switch-track"></span></span>
+            </label>
+            <label class="field">
+              <span>Action preference</span>
+              <select class="input" id="aiAction">
+                <option value="auto" <%= settings.aiAction === 'auto' ? 'selected' : '' %>>Auto (recommended)</option>
+                <option value="timeout" <%= settings.aiAction === 'timeout' ? 'selected' : '' %>>Timeout only</option>
+                <option value="kick" <%= settings.aiAction === 'kick' ? 'selected' : '' %>>Kick</option>
+                <option value="ban" <%= settings.aiAction === 'ban' ? 'selected' : '' %>>Ban (confirmation required)</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Model override</span>
+              <input class="input" id="aiModel" type="text" maxlength="100" value="<%= settings.aiModel || '' %>" placeholder="<%= defaultModel %>">
+              <small class="field-hint">Leave blank to use the dashboard default model.</small>
+            </label>
+            <label class="field">
+              <span>Confidence threshold <strong id="aiConfidenceValue"><%= Math.round(settings.aiConfidence * 100) %>%</strong></span>
+              <input id="aiConfidence" class="range" type="range" min="0.3" max="0.95" step="0.05" value="<%= settings.aiConfidence %>">
+              <small class="field-hint">Higher = fewer actions, more certainty.</small>
+            </label>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'sparkles', size: 18 }) %></span>
+                <div>
+                  <h3>AI test</h3>
+                  <p class="muted">Try a message and see the verdict before a real incident.</p>
+                </div>
+              </div>
+            </div>
+            <% if (!aiReady) { %>
+              <div class="inline-alert warn"><%- include('partials/icon', { name: 'alert-triangle', size: 16 }) %> Add OPENROUTER_API_KEY to the dashboard .env to test AI.</div>
+            <% } %>
+            <label class="field">
+              <span>Sample message</span>
+              <textarea class="input" id="aiTestText" rows="4" placeholder="e.g. I will leak your address if you don't send me Nitro"></textarea>
+            </label>
+            <button type="button" class="btn btn-primary" id="aiTestBtn"><%- include('partials/icon', { name: 'send', size: 16 }) %> Run AI test</button>
+            <div id="aiTestResult" class="ai-test-result"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="automod" id="panel-automod">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Chat safety</span>
+            <h2>AutoMod</h2>
+            <p class="muted">Keep the conversation clean without making the server feel heavily moderated.</p>
+          </div>
+          <span class="badge badge-muted"><%= chatFeatures.length %> filters</span>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'message-square', size: 18 }) %></span>
+              <div>
+                <h3>Chat filters</h3>
+                <p class="muted">Minor infractions delete the message, mute for 10 minutes and warn — never ban.</p>
+              </div>
+            </div>
+          </div>
+          <div class="feature-toggle-grid">
+            <% chatFeatures.forEach(function (feature) { %>
+              <label class="feature-toggle-row">
+                <span class="feature-toggle-copy">
+                  <strong><%= feature.label %></strong>
+                  <small><%= feature.description %></small>
+                </span>
+                <span class="switch"><input class="feature-toggle" data-feature="<%= feature.key %>" type="checkbox" <%= settings.features[feature.key] ? 'checked' : '' %>><span class="switch-track"></span></span>
+              </label>
+            <% }); %>
+          </div>
+        </div>
+
+        <div class="notice glass">
+          <span class="notice-icon"><%- include('partials/icon', { name: 'info', size: 18 }) %></span>
+          <div>
+            <strong>Native Discord AutoMod is separate.</strong>
+            <p>If Discord’s own AutoMod should ignore the main admin, add an exempt role in Discord’s AutoMod settings. Zyron’s own handlers already protect the main admin.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="tickets" id="panel-tickets">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Community</span>
+            <h2>Tickets</h2>
+            <p class="muted">Design the message, edit every button and publish a polished support panel.</p>
+          </div>
+          <span class="badge <%= settings.ticketPanelChannel ? 'badge-success' : 'badge-muted' %>"><%= settings.ticketPanelChannel ? 'Panel connected' : 'Not published' %></span>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card glass"><span>Total tickets</span><strong><%= activity.ticketStats.total %></strong></div>
+          <div class="stat-card glass"><span>Open</span><strong><%= activity.ticketStats.open %></strong></div>
+          <div class="stat-card glass"><span>Closed</span><strong><%= activity.ticketStats.closed %></strong></div>
+          <div class="stat-card glass"><span>Pending appeals</span><strong><%= activity.appealStats.pending %></strong></div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'list', size: 18 }) %></span>
+              <div>
+                <h3>Ticket activity</h3>
+                <p class="muted">Total tickets created and closed, including who closed them.</p>
+              </div>
+            </div>
+          </div>
+          <% if (activity.ticketStats.closedBy.length === 0) { %>
+            <div class="empty-inline">No tickets have been closed yet.</div>
+          <% } else { %>
+            <div class="data-list">
+              <% activity.ticketStats.closedBy.forEach(function (row) { %>
+                <div class="data-row"><span><strong><%= row.name %></strong><small><%= row.userId %></small></span><span class="badge badge-muted"><%= row.count %> closed</span></div>
+              <% }); %>
+            </div>
+          <% } %>
+          <% if (activity.tickets.length > 0) { %>
+            <div class="data-list">
+              <% activity.tickets.slice(0, 8).forEach(function (ticket) { %>
+                <div class="data-row">
+                  <span><strong><%= ticket.type %> #<%= ticket.number %></strong><small><%= ticket.reason || 'No reason' %></small></span>
+                  <span class="badge <%= ticket.status === 'open' ? 'badge-success' : 'badge-muted' %>"><%= ticket.status %></span>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'edit', size: 18 }) %></span>
+                <div>
+                  <h3>Panel message</h3>
+                  <p class="muted">Use <code>{{buttons}}</code> where the button list should appear.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Embed title</span>
+              <input class="input" id="ticketPanelTitle" type="text" maxlength="120" value="<%= settings.ticketPanelTitle %>">
+            </label>
+            <label class="field">
+              <span>Embed description</span>
+              <textarea class="input" id="ticketPanelDescription" rows="10" maxlength="4000"><%= settings.ticketPanelDescription %></textarea>
+              <small class="field-hint">Leave <code>{{buttons}}</code> in the text to show the custom button list.</small>
+            </label>
+            <label class="field">
+              <span>Footer</span>
+              <input class="input" id="ticketPanelFooter" type="text" maxlength="300" value="<%= settings.ticketPanelFooter %>">
+            </label>
+            <div class="field-grid two">
+              <label class="field">
+                <span>Main button label</span>
+                <input class="input" id="ticketCreateLabel" type="text" maxlength="80" value="<%= settings.ticketCreateLabel %>">
+              </label>
+              <label class="field">
+                <span>Main button emoji</span>
+                <input class="input" id="ticketCreateEmoji" type="text" maxlength="64" value="<%= settings.ticketCreateEmoji %>">
+              </label>
+            </div>
+          </div>
+
+          <div class="card glass preview-card">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'message-square', size: 18 }) %></span>
+                <div>
+                  <h3>Live preview</h3>
+                  <p class="muted">A rough Discord-style preview of the panel.</p>
+                </div>
+              </div>
+            </div>
+            <div class="discord-preview">
+              <div class="preview-embed" id="ticketPreviewEmbed">
+                <span class="preview-accent"></span>
+                <div class="preview-body">
+                  <strong class="preview-title" id="ticketPreviewTitle">Ticket panel</strong>
+                  <div class="preview-description" id="ticketPreviewDescription"></div>
+                  <div class="preview-buttons" id="ticketPreviewButtons"></div>
+                  <small class="preview-footer" id="ticketPreviewFooter"></small>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'ticket', size: 18 }) %></span>
+              <div>
+                <h3>Custom buttons</h3>
+                <p class="muted">Add up to 9 buttons. Every button asks the member for a reason before opening the ticket.</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="addTicketButton"><%- include('partials/icon', { name: 'plus', size: 15 }) %> Add button</button>
+          </div>
+          <div id="ticketButtonsEditor" class="dynamic-list"></div>
+          <div class="empty-inline" id="ticketButtonsEmpty">No custom buttons yet. The default Create Ticket button still works.</div>
+        </div>
+
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'sliders', size: 18 }) %></span>
+                <div>
+                  <h3>Routing</h3>
+                  <p class="muted">Where the panel lives and who can see tickets.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Panel channel ID</span>
+              <input class="input" id="ticketPanelChannel" type="text" maxlength="25" value="<%= settings.ticketPanelChannel || '' %>" placeholder="e.g. 1564684498661146656">
+              <small class="field-hint">Used by “Publish panel”. You can also send it with <code>.ticket setup</code>.</small>
+            </label>
+            <label class="field">
+              <span>Ticket staff role ID</span>
+              <input class="input" id="ticketStaffRole" type="text" maxlength="25" value="<%= settings.ticketStaffRole || '' %>" placeholder="Role ID">
+            </label>
+            <label class="field">
+              <span>Extra ticket staff roles</span>
+              <input class="input" id="ticketStaffRoles" type="text" maxlength="300" value="<%= (settings.ticketStaffRoles || []).join(', ') %>" placeholder="Role IDs separated by commas">
+              <small class="field-hint">These roles can see and manage every ticket. The accepted staff role can also be added here.</small>
+            </label>
+            <label class="field">
+              <span>Ticket category ID</span>
+              <input class="input" id="ticketCategory" type="text" maxlength="25" value="<%= settings.ticketCategory || '' %>" placeholder="Category ID">
+            </label>
+            <label class="field">
+              <span>Channel name pattern</span>
+              <input class="input" id="ticketNamePattern" type="text" maxlength="100" value="<%= settings.ticketNamePattern || 'ticket-{{ticket_number}}' %>" placeholder="name-{{ticket_number}}">
+              <small class="field-hint">Supports <code>{{ticket_number}}</code>, <code>{{user}}</code>, <code>{{username}}</code> and <code>{{type}}</code>.</small>
+            </label>
+            <label class="field">
+              <span>Ticket log channel ID</span>
+              <input class="input" id="ticketLogChannel" type="text" maxlength="25" value="<%= settings.ticketLogChannel || '' %>" placeholder="Log channel ID">
+            </label>
+            <label class="field">
+              <span>AI ticket assistant</span>
+              <select class="input" id="ticketAiEnabled">
+                <option value="true" <%= settings.ticketAiEnabled !== false ? 'selected' : '' %>>Enabled - reply to the first message and help the member</option>
+                <option value="false" <%= settings.ticketAiEnabled === false ? 'selected' : '' %>>Disabled - staff only</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'send', size: 18 }) %></span>
+                <div>
+                  <h3>Publish</h3>
+                  <p class="muted">Save the panel and send it to Discord in one step.</p>
+                </div>
+              </div>
+            </div>
+            <div class="callout-list">
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Sends the exact message above</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Uses the saved channel ID</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Buttons open real Zyron tickets</span>
+            </div>
+            <% if (!botTokenConfigured) { %>
+              <div class="inline-alert warn"><%- include('partials/icon', { name: 'alert-triangle', size: 16 }) %> Add BOT_TOKEN to the dashboard .env to publish panels from the website.</div>
+            <% } %>
+            <button type="button" class="btn btn-primary" data-publish="ticket"><%- include('partials/icon', { name: 'send', size: 16 }) %> Save & publish panel</button>
+            <small class="field-hint">You can still run <code>.ticket panel</code> in Discord at any time.</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="staff" id="panel-staff">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Community</span>
+            <h2>Staff Applications</h2>
+            <p class="muted">Build the whole hiring flow: panel, questions, review channel and accepted role.</p>
+          </div>
+          <span class="badge <%= settings.applicationChannel ? 'badge-success' : 'badge-muted' %>"><%= settings.applicationChannel ? 'Applications open' : 'Not configured' %></span>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card glass"><span>Total applications</span><strong><%= activity.staffStats.total %></strong></div>
+          <div class="stat-card glass"><span>Pending</span><strong><%= activity.staffStats.pending %></strong></div>
+          <div class="stat-card glass"><span>Accepted</span><strong><%= activity.staffStats.accepted %></strong></div>
+          <div class="stat-card glass"><span>Denied</span><strong><%= activity.staffStats.denied %></strong></div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'brain', size: 18 }) %></span>
+              <div>
+                <h3>Staff advice</h3>
+                <p class="muted">Zyron suggests who to promote, demote, or keep. Choose a role ID before applying an action.</p>
+              </div>
+            </div>
+          </div>
+          <% if (!activity.staffAdvice || activity.staffAdvice.length === 0) { %>
+            <div class="empty-inline">No staff activity yet. Advice appears after staff close tickets.</div>
+          <% } else { %>
+            <div class="data-list">
+              <% activity.staffAdvice.forEach(function (advice) { %>
+                <div class="data-row staff-advice-row">
+                  <span>
+                    <strong><%= advice.name %></strong>
+                    <small>Advice - you can <b><%= advice.action %></b> this staff because <%= advice.reason %>. Closed: <%= advice.closes %></small>
+                  </span>
+                  <span class="staff-advice-actions">
+                    <input class="input input-compact" id="staffRole-<%= advice.userId %>" type="text" maxlength="25" placeholder="Role ID">
+                    <button type="button" class="btn btn-ghost btn-sm" data-staff-action="promote" data-staff-user="<%= advice.userId %>">Promote</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-staff-action="demote" data-staff-user="<%= advice.userId %>">Demote</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-staff-action="remove" data-staff-user="<%= advice.userId %>">Remove</button>
+                  </span>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'edit', size: 18 }) %></span>
+                <div>
+                  <h3>Application panel</h3>
+                  <p class="muted">The public message members see before they apply.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Embed title</span>
+              <input class="input" id="staffApplyPanelTitle" type="text" maxlength="120" value="<%= settings.staffApplyPanelTitle %>">
+            </label>
+            <label class="field">
+              <span>Embed description</span>
+              <textarea class="input" id="staffApplyPanelDescription" rows="8" maxlength="4000"><%= settings.staffApplyPanelDescription %></textarea>
+            </label>
+            <label class="field">
+              <span>Footer</span>
+              <input class="input" id="staffApplyPanelFooter" type="text" maxlength="300" value="<%= settings.staffApplyPanelFooter %>">
+            </label>
+            <div class="field-grid two">
+              <label class="field">
+                <span>Apply button label</span>
+                <input class="input" id="staffApplyButtonLabel" type="text" maxlength="80" value="<%= settings.staffApplyButtonLabel %>">
+              </label>
+              <label class="field">
+                <span>Apply button emoji</span>
+                <input class="input" id="staffApplyButtonEmoji" type="text" maxlength="64" value="<%= settings.staffApplyButtonEmoji %>">
+              </label>
+            </div>
+            <label class="field">
+              <span>Application form title</span>
+              <input class="input" id="staffApplyModalTitle" type="text" maxlength="45" value="<%= settings.staffApplyModalTitle %>">
+              <small class="field-hint">Shown at the top of the Discord application form.</small>
+            </label>
+          </div>
+
+          <div class="card glass preview-card">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'message-square', size: 18 }) %></span>
+                <div>
+                  <h3>Live preview</h3>
+                  <p class="muted">Panel preview plus the questions members will answer.</p>
+                </div>
+              </div>
+            </div>
+            <div class="discord-preview">
+              <div class="preview-embed">
+                <span class="preview-accent"></span>
+                <div class="preview-body">
+                  <strong class="preview-title" id="staffPreviewTitle">Staff applications</strong>
+                  <div class="preview-description" id="staffPreviewDescription"></div>
+                  <div class="preview-buttons" id="staffPreviewButtons"></div>
+                  <small class="preview-footer" id="staffPreviewFooter"></small>
+                </div>
+              </div>
+            </div>
+            <div class="preview-form" id="staffPreviewForm"></div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'list', size: 18 }) %></span>
+              <div>
+                <h3>Application questions</h3>
+                <p class="muted">Discord modals allow up to 5 questions. Drag-free reordering with the arrow buttons.</p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-ghost btn-sm" id="addStaffQuestion"><%- include('partials/icon', { name: 'plus', size: 15 }) %> Add question</button>
+          </div>
+          <div id="staffQuestionsEditor" class="dynamic-list"></div>
+        </div>
+
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'user-check', size: 18 }) %></span>
+                <div>
+                  <h3>Review & result</h3>
+                  <p class="muted">Where applications arrive and what the accepted member receives.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Applications channel ID</span>
+              <input class="input" id="applicationChannel" type="text" maxlength="25" value="<%= settings.applicationChannel || '' %>" placeholder="Channel ID">
+            </label>
+            <label class="field">
+              <span>Accepted role ID</span>
+              <input class="input" id="staffApplyAcceptRole" type="text" maxlength="25" value="<%= settings.staffApplyAcceptRole || '' %>" placeholder="Role ID">
+              <small class="field-hint">Automatically added when a manager clicks Accept.</small>
+            </label>
+            <label class="field">
+              <span>Extra accepted roles</span>
+              <input class="input" id="staffApplyAcceptRoles" type="text" maxlength="300" value="<%= (settings.staffApplyAcceptRoles || []).join(', ') %>" placeholder="Role IDs separated by commas">
+              <small class="field-hint">All of these roles are added when an application is accepted.</small>
+            </label>
+            <label class="field">
+              <span>Appeal invite channel ID</span>
+              <input class="input" id="appealInviteChannel" type="text" maxlength="25" value="<%= settings.appealInviteChannel || '' %>" placeholder="Optional channel ID">
+              <small class="field-hint">Where Zyron creates the one-use invite after an appeal is approved.</small>
+            </label>
+            <label class="field">
+              <span>Warnings before kick</span>
+              <input class="input" id="warningKickThreshold" type="number" min="1" max="20" value="<%= settings.warningKickThreshold || 5 %>">
+              <small class="field-hint">Spam and minor abuse are deleted and muted, then kicked at this warning count.</small>
+            </label>
+            <label class="field">
+              <span>Accepted DM message</span>
+              <textarea class="input" id="staffApplyAcceptMessage" rows="4" maxlength="1000"><%= settings.staffApplyAcceptMessage %></textarea>
+              <small class="field-hint">Use <code>{server}</code> for the server name.</small>
+            </label>
+            <label class="field">
+              <span>Denied DM message</span>
+              <textarea class="input" id="staffApplyDenyMessage" rows="4" maxlength="1000"><%= settings.staffApplyDenyMessage %></textarea>
+            </label>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'send', size: 18 }) %></span>
+                <div>
+                  <h3>Publish</h3>
+                  <p class="muted">Save the panel and send it to your applications channel.</p>
+                </div>
+              </div>
+            </div>
+            <div class="callout-list">
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Custom questions appear in the modal</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Accept role is assigned automatically</span>
+              <span><%- include('partials/icon', { name: 'check', size: 14 }) %> Accept / deny DMs use your text</span>
+            </div>
+            <% if (!botTokenConfigured) { %>
+              <div class="inline-alert warn"><%- include('partials/icon', { name: 'alert-triangle', size: 16 }) %> Add BOT_TOKEN to the dashboard .env to publish panels from the website.</div>
+            <% } %>
+            <button type="button" class="btn btn-primary" data-publish="staff"><%- include('partials/icon', { name: 'send', size: 16 }) %> Save & publish panel</button>
+            <small class="field-hint">You can still run <code>.staff-apply panel</code> in Discord at any time.</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="appeals" id="panel-appeals">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Moderation</span>
+            <h2>Appeals</h2>
+            <p class="muted">Only admins and staff with dashboard access can review these appeal cases.</p>
+          </div>
+          <span class="badge <%= activity.appealStats.pending > 0 ? 'badge-warning' : 'badge-success' %>"><%= activity.appealStats.pending %> pending</span>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card glass"><span>Total appeals</span><strong><%= activity.appealStats.total %></strong></div>
+          <div class="stat-card glass"><span>Pending</span><strong><%= activity.appealStats.pending %></strong></div>
+          <div class="stat-card glass"><span>Approved</span><strong><%= activity.appealStats.approved %></strong></div>
+          <div class="stat-card glass"><span>Declined</span><strong><%= activity.appealStats.denied %></strong></div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'alert-triangle', size: 18 }) %></span>
+              <div>
+                <h3>Pending review</h3>
+                <p class="muted">Approve to unban or invite the member with a one-use Zyron invite. Deny to send the opposite result.</p>
+              </div>
+            </div>
+          </div>
+          <% var pendingAppeals = activity.appeals.filter(function (appeal) { return appeal.status === 'pending'; }); %>
+          <% if (pendingAppeals.length === 0) { %>
+            <div class="empty-inline">No pending appeals right now.</div>
+          <% } else { %>
+            <div class="data-list">
+              <% pendingAppeals.forEach(function (appeal) { %>
+                <div class="appeal-card">
+                  <div class="appeal-head">
+                    <span><strong>&lt;@<%= appeal.userId %>&gt;</strong><small>Case <%= appeal.id %> | <%= appeal.actionTaken || appeal.action %> | <%= appeal.warnings || 0 %> warnings</small></span>
+                    <span class="badge badge-warning">Pending</span>
+                  </div>
+                  <p><strong>Reason:</strong> <%= appeal.reason || 'No reason provided' %></p>
+                  <% if (appeal.answers) { %>
+                    <p><strong>Did they apologize?</strong> <%= appeal.answers.apology || 'Not answered' %></p>
+                    <p><strong>What happened?</strong> <%= appeal.answers.whatHappened || 'Not answered' %></p>
+                    <p><strong>Why approve?</strong> <%= appeal.answers.whyUnban || 'Not answered' %></p>
+                  <% } else { %>
+                    <p class="muted">The member has not submitted the appeal questions yet.</p>
+                  <% } %>
+                  <div class="appeal-actions">
+                    <button type="button" class="btn btn-primary btn-sm" data-appeal-action="approve" data-case-id="<%= appeal.id %>">Approve &amp; send invite</button>
+                    <button type="button" class="btn btn-ghost btn-sm" data-appeal-action="deny" data-case-id="<%= appeal.id %>">Decline appeal</button>
+                  </div>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'list', size: 18 }) %></span>
+              <div>
+                <h3>Recent appeal cases</h3>
+                <p class="muted">Every appeal, including the staff decision and generated invite.</p>
+              </div>
+            </div>
+          </div>
+          <% if (activity.appeals.length === 0) { %>
+            <div class="empty-inline">No appeal cases yet.</div>
+          <% } else { %>
+            <div class="data-list">
+              <% activity.appeals.slice(0, 10).forEach(function (appeal) { %>
+                <div class="data-row">
+                  <span><strong>&lt;@<%= appeal.userId %>&gt;</strong><small><%= appeal.reason || 'No reason' %></small></span>
+                  <span class="badge <%= appeal.status === 'approved' ? 'badge-success' : (appeal.status === 'denied' ? 'badge-muted' : 'badge-warning') %>"><%= appeal.status %></span>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="giveaways" id="panel-giveaways">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Community</span>
+            <h2>Giveaways</h2>
+            <p class="muted">Reaction giveaways with start, end and reroll controls. No premium, no extra setup.</p>
+          </div>
+          <span class="badge badge-success">Included</span>
+        </div>
+
+        <div class="giveaway-hero glass">
+          <div>
+            <span class="eyebrow">Giveaway studio</span>
+            <h2>Make the next drop feel special.</h2>
+            <p>Run giveaways directly in Discord. Zyron tracks entries, picks winners and supports rerolls.</p>
+            <a class="btn btn-primary" href="<%= brand.invite %>" target="_blank" rel="noopener">Open support server <%- include('partials/icon', { name: 'external-link', size: 14 }) %></a>
+          </div>
+          <div class="giveaway-orb"><%- include('partials/icon', { name: 'gift', size: 46 }) %></div>
+        </div>
+
+        <div class="command-grid">
+          <div class="command-card glass">
+            <span class="command-icon green"><%- include('partials/icon', { name: 'rocket', size: 18 }) %></span>
+            <h3>Start</h3>
+            <code>.giveaway start 10m Nitro Classic</code>
+            <p>Duration accepts <code>10m</code>, <code>2h</code> or <code>1d</code>.</p>
+          </div>
+          <div class="command-card glass">
+            <span class="command-icon amber"><%- include('partials/icon', { name: 'clock', size: 18 }) %></span>
+            <h3>End early</h3>
+            <code>.giveaway end &lt;messageID&gt;</code>
+            <p>Pick a winner immediately instead of waiting.</p>
+          </div>
+          <div class="command-card glass">
+            <span class="command-icon violet"><%- include('partials/icon', { name: 'refresh', size: 18 }) %></span>
+            <h3>Reroll</h3>
+            <code>.giveaway reroll &lt;messageID&gt;</code>
+            <p>Choose a new winner from the same entries.</p>
+          </div>
+          <div class="command-card glass">
+            <span class="command-icon blue"><%- include('partials/icon', { name: 'list', size: 18 }) %></span>
+            <h3>List</h3>
+            <code>.giveaway list</code>
+            <p>See every active giveaway in the server.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="economy" id="panel-economy">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Community</span>
+            <h2>Economy</h2>
+            <p class="muted">Every server has its own coins, rewards and limits.</p>
           </div>
           <span class="badge badge-success">No premium</span>
         </div>
 
-        <div class="form-grid">
-          <label class="field">
-            <span>Daily reward (coins)</span>
-            <input class="input" id="economyDaily" type="number" min="1" max="100000" value="<%= settings.economyDaily %>">
-            <small class="field-hint">Coins a member receives with .economy daily. Default 100.</small>
-          </label>
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'coins', size: 18 }) %></span>
+                <div>
+                  <h3>Daily rewards</h3>
+                  <p class="muted">Coins a member receives with <code>.economy daily</code>.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Daily reward (coins)</span>
+              <input class="input" id="economyDaily" type="number" min="1" max="100000" value="<%= settings.economyDaily %>">
+              <small class="field-hint">Default 100. 24-hour cooldown per member.</small>
+            </label>
+          </div>
 
-          <label class="field">
-            <span>Invite reward (coins)</span>
-            <input class="input" id="economyInvite" type="number" min="0" max="100000" value="<%= settings.economyInvite %>">
-            <small class="field-hint">Coins the inviter receives for a real join. Set 0 to disable. Default 25.</small>
-          </label>
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'users', size: 18 }) %></span>
+                <div>
+                  <h3>Invite rewards</h3>
+                  <p class="muted">Coins awarded for a real member join.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Invite reward (coins)</span>
+              <input class="input" id="economyInvite" type="number" min="0" max="100000" value="<%= settings.economyInvite %>">
+              <small class="field-hint">Default 25. Set 0 to disable invite rewards.</small>
+            </label>
+          </div>
         </div>
       </section>
 
-      <section class="card">
-        <div class="card-head">
-          <div class="card-title">
-            <span class="card-icon"><%- include('partials/icon', { name: 'settings', size: 18 }) %></span>
-            <div>
-              <h2>Protections</h2>
-              <p class="muted">Every guard is independent. Turn off only what you do not need.</p>
-            </div>
+      <section class="panel" data-panel="settings" id="panel-settings">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Configure</span>
+            <h2>Server settings</h2>
+            <p class="muted">The quiet plumbing: prefix, logs and automatic roles.</p>
           </div>
-          <span class="badge badge-soft">24 guards</span>
         </div>
 
-        <% featureGroups.forEach(function (group) { %>
-          <div class="feature-group">
-            <div class="feature-group-head">
-              <h3><%= group.label %></h3>
-              <p class="muted"><%= group.description %></p>
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'sliders', size: 18 }) %></span>
+                <div>
+                  <h3>Basics</h3>
+                  <p class="muted">How members talk to Zyron and where evidence lands.</p>
+                </div>
+              </div>
             </div>
-            <div class="feature-grid">
-              <% featureCatalog.filter(function (feature) { return feature.group === group.key; }).forEach(function (feature) { %>
-                <label class="feature-item">
-                  <span class="feature-copy">
-                    <strong><%= feature.label %></strong>
-                    <small><%= feature.description %></small>
-                  </span>
-                  <span class="switch">
-                    <input type="checkbox" class="feature-toggle" data-feature="<%= feature.key %>" <%= settings.features[feature.key] ? 'checked' : '' %>>
-                    <span class="slider"></span>
-                  </span>
-                </label>
-              <% }); %>
-            </div>
+            <label class="field">
+              <span>Prefix</span>
+              <input class="input" id="prefix" type="text" maxlength="5" value="<%= settings.prefix %>">
+            </label>
+            <label class="field">
+              <span>Log channel ID</span>
+              <input class="input" id="logChannel" type="text" maxlength="25" value="<%= settings.logChannel || '' %>" placeholder="Leave blank to auto-create #zyron-logs">
+              <small class="field-hint">Zyron creates a private <code>#zyron-logs</code> automatically if this is blank.</small>
+            </label>
+            <label class="field">
+              <span>Anti-Nuke punishment</span>
+              <select class="input" id="punishmentSettings">
+                <option value="ban" <%= settings.punishment === 'ban' ? 'selected' : '' %>>Ban</option>
+                <option value="kick" <%= settings.punishment === 'kick' ? 'selected' : '' %>>Kick</option>
+                <option value="mute" <%= settings.punishment === 'mute' ? 'selected' : '' %>>Mute</option>
+              </select>
+            </label>
           </div>
-        <% }); %>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'users', size: 18 }) %></span>
+                <div>
+                  <h3>Automatic roles</h3>
+                  <p class="muted">Give new members and bots their first role automatically.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Member auto-role ID</span>
+              <input class="input" id="autoRoleId" type="text" maxlength="25" value="<%= settings.autoRoleId || '' %>" placeholder="Role ID">
+            </label>
+            <label class="field">
+              <span>Bot auto-role ID</span>
+              <input class="input" id="autoRoleBotId" type="text" maxlength="25" value="<%= settings.autoRoleBotId || '' %>" placeholder="Role ID">
+            </label>
+            <label class="field">
+              <span>Booster role ID</span>
+              <input class="input" id="boosterRoleId" type="text" maxlength="25" value="<%= settings.boosterRoleId || '' %>" placeholder="Role ID">
+            </label>
+          </div>
+        </div>
+
+        <div class="notice glass">
+          <span class="notice-icon"><%- include('partials/icon', { name: 'alert-triangle', size: 18 }) %></span>
+          <div>
+            <strong>Keep the bot role above the roles it manages.</strong>
+            <p>Discord only lets Zyron add or remove roles that sit below its own role. This is a Discord hierarchy rule, not a Zyron limit.</p>
+          </div>
+        </div>
       </section>
 
-      <div class="form-actions">
-        <button class="btn btn-primary btn-lg" id="saveBottom" type="button">Save Changes</button>
-        <a class="btn btn-ghost btn-lg" href="/dashboard">Cancel</a>
+      <div class="sticky-save glass">
+        <span class="sticky-save-copy"><span class="status-dot"></span> Changes are saved to <strong><%= serverName %></strong></span>
+        <button type="button" class="btn btn-primary btn-sm" data-save><%- include('partials/icon', { name: 'save', size: 15 }) %> Save changes</button>
       </div>
     </form>
 
     <footer class="page-footer">
-      <span>Zyron <span class="dot" aria-hidden="true"></span> Powered by Zyra Nodes Limited</span>
-      <a href="<%= brand.invite %>" target="_blank" rel="noopener">Support</a>
+      <span>Zyron — server control room.</span>
+      <span>Powered by <a href="<%= brand.invite %>" target="_blank" rel="noopener"><%= brand.company %></a></span>
     </footer>
   </main>
 
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    window.ZYRON = {
+      serverId: <%- safeJson(serverId) %>,
+      initialTab: <%- safeJson(initialTab) %>,
+      botTokenConfigured: <%- safeJson(botTokenConfigured) %>,
+      ticketButtons: <%- safeJson(settings.ticketButtons || []) %>,
+      staffQuestions: <%- safeJson(settings.staffApplyQuestions || []) %>,
+      ticketButtonStyles: <%- safeJson(ticketButtonStyles) %>,
+      staffQuestionStyles: <%- safeJson(staffQuestionStyles) %>
+    };
+  </script>
   <script>
     (function () {
-      var serverId = <%- JSON.stringify(serverId) %>;
+      var Z = window.ZYRON;
+      var form = document.getElementById('settingsForm');
+      var saveStatus = document.getElementById('saveStatus');
+      var toastEl = document.getElementById('toast');
+      var ticketButtons = Array.isArray(Z.ticketButtons) ? Z.ticketButtons.slice() : [];
+      var staffQuestions = Array.isArray(Z.staffQuestions) ? Z.staffQuestions.slice() : [];
+      var dirty = false;
+      var saving = false;
 
-      function byId(id) {
-        return document.getElementById(id);
-      }
-
-      function valueOf(id) {
-        var element = byId(id);
-        return element ? element.value : '';
-      }
-
-      function isChecked(id) {
-        var element = byId(id);
-        return element ? element.checked : false;
-      }
-
+      function byId(id) { return document.getElementById(id); }
+      function value(id) { var el = byId(id); return el ? el.value : ''; }
+      function checked(id) { var el = byId(id); return el ? el.checked : false; }
       function escapeHtml(text) {
-        return String(text).replace(/[&<>"']/g, function (character) {
-          if (character === '&') return '&amp;';
-          if (character === '<') return '&lt;';
-          if (character === '>') return '&gt;';
-          if (character === '"') return '&quot;';
-          return '&#39;';
+        return String(text == null ? '' : text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+      function formatDiscord(text) {
+        var safe = escapeHtml(text);
+        safe = safe.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        safe = safe.replace(/`(.+?)`/g, '<code>$1</code>');
+        return safe.replace(/\n/g, '<br>');
+      }
+      function toast(message, type) {
+        if (!toastEl) return;
+        toastEl.textContent = message;
+        toastEl.className = 'toast show ' + (type || '');
+        window.clearTimeout(toastEl._timer);
+        toastEl._timer = window.setTimeout(function () {
+          toastEl.className = 'toast';
+        }, 3600);
+      }
+      function markDirty() {
+        dirty = true;
+        if (saveStatus) {
+          saveStatus.textContent = 'Unsaved changes';
+          saveStatus.classList.add('dirty');
+        }
+      }
+      function markSaved() {
+        dirty = false;
+        if (saveStatus) {
+          saveStatus.textContent = 'Saved just now';
+          saveStatus.classList.remove('dirty');
+        }
+      }
+
+      function showPanel(id) {
+        var panels = document.querySelectorAll('.panel[data-panel]');
+        var found = false;
+        panels.forEach(function (panel) {
+          var active = panel.getAttribute('data-panel') === id;
+          panel.classList.toggle('active', active);
+          if (active) found = true;
+        });
+        if (!found) return;
+        document.querySelectorAll('.server-nav-link[data-panel]').forEach(function (link) {
+          link.classList.toggle('active', link.getAttribute('data-panel') === id);
+        });
+        if (window.history && window.history.replaceState) {
+          window.history.replaceState(null, '', '#' + id);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      document.querySelectorAll('.server-nav-link[data-panel]').forEach(function (link) {
+        link.addEventListener('click', function (event) {
+          event.preventDefault();
+          showPanel(link.getAttribute('data-panel'));
+        });
+      });
+      document.querySelectorAll('[data-jump]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          showPanel(button.getAttribute('data-jump'));
+        });
+      });
+      window.addEventListener('hashchange', function () {
+        var id = window.location.hash.replace('#', '');
+        if (id) showPanel(id);
+      });
+
+      var initial = window.location.hash.replace('#', '') || Z.initialTab || 'overview';
+      showPanel(initial);
+
+      function makeInput(className, type, value, placeholder, maxLength) {
+        var input = document.createElement('input');
+        input.className = className || 'input';
+        input.type = type || 'text';
+        if (value !== undefined && value !== null) input.value = value;
+        if (placeholder) input.placeholder = placeholder;
+        if (maxLength) input.maxLength = maxLength;
+        return input;
+      }
+
+      function makeSelect(className, values, selected) {
+        var select = document.createElement('select');
+        select.className = className || 'input';
+        values.forEach(function (option) {
+          var el = document.createElement('option');
+          el.value = option.value;
+          el.textContent = option.label;
+          if (option.value === selected) el.selected = true;
+          select.appendChild(el);
+        });
+        return select;
+      }
+
+      function field(label, control, hint, className) {
+        var wrap = document.createElement('label');
+        wrap.className = 'field ' + (className || '');
+        var title = document.createElement('span');
+        title.textContent = label;
+        wrap.appendChild(title);
+        wrap.appendChild(control);
+        if (hint) {
+          var small = document.createElement('small');
+          small.className = 'field-hint';
+          small.textContent = hint;
+          wrap.appendChild(small);
+        }
+        return wrap;
+      }
+
+      function rowActions(onMove, onDelete) {
+        var actions = document.createElement('div');
+        actions.className = 'row-actions';
+        var up = document.createElement('button');
+        up.type = 'button';
+        up.className = 'icon-btn ghost';
+        up.title = 'Move up';
+        up.innerHTML = '<span aria-hidden="true">↑</span>';
+        up.addEventListener('click', onMove.bind(null, -1));
+        var down = document.createElement('button');
+        down.type = 'button';
+        down.className = 'icon-btn ghost';
+        down.title = 'Move down';
+        down.innerHTML = '<span aria-hidden="true">↓</span>';
+        down.addEventListener('click', onMove.bind(null, 1));
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'icon-btn danger';
+        remove.title = 'Remove';
+        remove.textContent = '×';
+        remove.addEventListener('click', onDelete);
+        actions.appendChild(up);
+        actions.appendChild(down);
+        actions.appendChild(remove);
+        return actions;
+      }
+
+      function renderTicketButtons() {
+        var editor = byId('ticketButtonsEditor');
+        var empty = byId('ticketButtonsEmpty');
+        if (!editor) return;
+        editor.innerHTML = '';
+        if (empty) empty.style.display = ticketButtons.length ? 'none' : 'block';
+
+        ticketButtons.forEach(function (button, index) {
+          var row = document.createElement('div');
+          row.className = 'dynamic-row';
+          row.setAttribute('data-index', String(index));
+
+          var head = document.createElement('div');
+          head.className = 'dynamic-row-head';
+          var number = document.createElement('span');
+          number.className = 'row-number';
+          number.textContent = String(index + 1).padStart(2, '0');
+          var kind = document.createElement('span');
+          kind.className = 'row-kind';
+          kind.textContent = 'Ticket button';
+          head.appendChild(number);
+          head.appendChild(kind);
+          head.appendChild(rowActions(function (direction) {
+            var target = index + direction;
+            if (target < 0 || target >= ticketButtons.length) return;
+            var item = ticketButtons.splice(index, 1)[0];
+            ticketButtons.splice(target, 0, item);
+            renderTicketButtons();
+            updateTicketPreview();
+            markDirty();
+          }, function () {
+            ticketButtons.splice(index, 1);
+            renderTicketButtons();
+            updateTicketPreview();
+            markDirty();
+          }));
+          row.appendChild(head);
+
+          var grid = document.createElement('div');
+          grid.className = 'row-grid';
+          var labelInput = makeInput('input', 'text', button.label, 'Button label', 80);
+          labelInput.addEventListener('input', function () { button.label = labelInput.value; updateTicketPreview(); markDirty(); });
+          var emojiInput = makeInput('input', 'text', button.emoji, '🎫', 64);
+          emojiInput.addEventListener('input', function () { button.emoji = emojiInput.value; updateTicketPreview(); markDirty(); });
+          var messageInput = makeInput('input', 'text', button.message, 'Internal ticket message', 200);
+          messageInput.addEventListener('input', function () { button.message = messageInput.value; markDirty(); });
+          var styleSelect = makeSelect('input', [
+            { value: 'primary', label: 'Blue — primary' },
+            { value: 'secondary', label: 'Grey — secondary' },
+            { value: 'success', label: 'Green — success' },
+            { value: 'danger', label: 'Red — danger' }
+          ], button.style || 'secondary');
+          styleSelect.addEventListener('change', function () { button.style = styleSelect.value; updateTicketPreview(); markDirty(); });
+
+          grid.appendChild(field('Label', labelInput, 'Shown on the button', 'span-1'));
+          grid.appendChild(field('Emoji', emojiInput, 'Unicode or <:name:id>', 'span-1'));
+          grid.appendChild(field('Style', styleSelect, '', 'span-1'));
+          grid.appendChild(field('Internal message', messageInput, 'Opens this topic in the ticket', 'span-3'));
+          row.appendChild(grid);
+          editor.appendChild(row);
         });
       }
 
-      function showToast(message, type) {
-        var toast = byId('toast');
-        if (!toast) return;
-        toast.textContent = message;
-        toast.className = 'toast show ' + (type || 'ok');
-        window.setTimeout(function () {
-          toast.className = 'toast';
-        }, 3500);
+      function renderStaffQuestions() {
+        var editor = byId('staffQuestionsEditor');
+        if (!editor) return;
+        editor.innerHTML = '';
+
+        staffQuestions.forEach(function (question, index) {
+          var row = document.createElement('div');
+          row.className = 'dynamic-row';
+          row.setAttribute('data-index', String(index));
+
+          var head = document.createElement('div');
+          head.className = 'dynamic-row-head';
+          var number = document.createElement('span');
+          number.className = 'row-number';
+          number.textContent = String(index + 1).padStart(2, '0');
+          var kind = document.createElement('span');
+          kind.className = 'row-kind';
+          kind.textContent = 'Application question';
+          head.appendChild(number);
+          head.appendChild(kind);
+          head.appendChild(rowActions(function (direction) {
+            var target = index + direction;
+            if (target < 0 || target >= staffQuestions.length) return;
+            var item = staffQuestions.splice(index, 1)[0];
+            staffQuestions.splice(target, 0, item);
+            renderStaffQuestions();
+            updateStaffPreview();
+            markDirty();
+          }, function () {
+            staffQuestions.splice(index, 1);
+            renderStaffQuestions();
+            updateStaffPreview();
+            markDirty();
+          }));
+          row.appendChild(head);
+
+          var grid = document.createElement('div');
+          grid.className = 'row-grid';
+          var labelInput = makeInput('input', 'text', question.label, 'Question label', 45);
+          labelInput.addEventListener('input', function () { question.label = labelInput.value; updateStaffPreview(); markDirty(); });
+          var placeholderInput = makeInput('input', 'text', question.placeholder, 'Placeholder text', 100);
+          placeholderInput.addEventListener('input', function () { question.placeholder = placeholderInput.value; markDirty(); });
+          var styleSelect = makeSelect('input', [
+            { value: 'short', label: 'Short answer' },
+            { value: 'paragraph', label: 'Paragraph' }
+          ], question.style || 'short');
+          styleSelect.addEventListener('change', function () {
+            question.style = styleSelect.value;
+            if (question.style === 'paragraph' && Number(question.maxLength) < 200) {
+              question.maxLength = 500;
+              maxInput.value = '500';
+            }
+            updateStaffPreview();
+            markDirty();
+          });
+          var maxInput = makeInput('input', 'number', question.maxLength || 100, '', 4);
+          maxInput.min = '1';
+          maxInput.max = '1000';
+          maxInput.addEventListener('input', function () { question.maxLength = Number(maxInput.value) || 1; markDirty(); });
+          var required = document.createElement('input');
+          required.type = 'checkbox';
+          required.checked = question.required !== false;
+          required.addEventListener('change', function () { question.required = required.checked; markDirty(); });
+          var requiredWrap = document.createElement('label');
+          requiredWrap.className = 'check-inline';
+          requiredWrap.appendChild(required);
+          var requiredText = document.createElement('span');
+          requiredText.textContent = 'Required';
+          requiredWrap.appendChild(requiredText);
+
+          grid.appendChild(field('Label', labelInput, 'Shown in the modal', 'span-2'));
+          grid.appendChild(field('Type', styleSelect, '', 'span-1'));
+          grid.appendChild(field('Max length', maxInput, '1–1000', 'span-1'));
+          grid.appendChild(field('Placeholder', placeholderInput, 'Optional hint', 'span-3'));
+          grid.appendChild(field('Validation', requiredWrap, '', 'span-2'));
+          row.appendChild(grid);
+          editor.appendChild(row);
+        });
       }
 
-      var range = byId('aiConfidence');
-      var rangeValue = byId('aiConfidenceValue');
-      if (range && rangeValue) {
-        range.addEventListener('input', function () {
-          rangeValue.textContent = Math.round(parseFloat(range.value) * 100) + '%';
+      function updateTicketPreview() {
+        var title = byId('ticketPreviewTitle');
+        var description = byId('ticketPreviewDescription');
+        var footer = byId('ticketPreviewFooter');
+        var buttons = byId('ticketPreviewButtons');
+        if (!title) return;
+
+        var descriptionText = value('ticketPanelDescription');
+        var buttonLines = ticketButtons.map(function (button) {
+          return '• ' + (button.emoji ? button.emoji + ' ' : '') + '**' + (button.label || 'Button') + '** — ' + (button.message || '');
+        }).join('\n');
+        descriptionText = descriptionText.split('{{buttons}}').join(buttonLines);
+
+        title.textContent = value('ticketPanelTitle') || 'Ticket panel';
+        description.innerHTML = formatDiscord(descriptionText);
+        footer.textContent = value('ticketPanelFooter') || '';
+        buttons.innerHTML = '';
+
+        var allButtons = [{
+          label: value('ticketCreateLabel') || 'Create Ticket',
+          emoji: value('ticketCreateEmoji') || '🎫',
+          style: 'primary'
+        }].concat(ticketButtons);
+
+        allButtons.forEach(function (button) {
+          var chip = document.createElement('span');
+          chip.className = 'discord-btn ' + (button.style || 'secondary');
+          var emoji = document.createElement('span');
+          emoji.textContent = button.emoji || '';
+          var label = document.createElement('span');
+          label.textContent = button.label || 'Button';
+          chip.appendChild(emoji);
+          chip.appendChild(label);
+          buttons.appendChild(chip);
+        });
+      }
+
+      function updateStaffPreview() {
+        var title = byId('staffPreviewTitle');
+        var description = byId('staffPreviewDescription');
+        var footer = byId('staffPreviewFooter');
+        var buttons = byId('staffPreviewButtons');
+        var form = byId('staffPreviewForm');
+        if (!title) return;
+
+        title.textContent = value('staffApplyPanelTitle') || 'Staff applications';
+        description.innerHTML = formatDiscord(value('staffApplyPanelDescription'));
+        footer.textContent = value('staffApplyPanelFooter') || '';
+        buttons.innerHTML = '';
+        var chip = document.createElement('span');
+        chip.className = 'discord-btn success';
+        var emoji = document.createElement('span');
+        emoji.textContent = value('staffApplyButtonEmoji') || '📝';
+        var label = document.createElement('span');
+        label.textContent = value('staffApplyButtonLabel') || 'Apply Now';
+        chip.appendChild(emoji);
+        chip.appendChild(label);
+        buttons.appendChild(chip);
+
+        form.innerHTML = '';
+        staffQuestions.forEach(function (question, index) {
+          var item = document.createElement('div');
+          item.className = 'preview-question';
+          var number = document.createElement('span');
+          number.className = 'preview-question-number';
+          number.textContent = String(index + 1);
+          var copy = document.createElement('span');
+          var strong = document.createElement('strong');
+          strong.textContent = question.label || 'Question ' + (index + 1);
+          var small = document.createElement('small');
+          small.textContent = (question.style === 'paragraph' ? 'Paragraph' : 'Short answer') +
+            ' · max ' + (question.maxLength || 100) +
+            (question.required === false ? ' · optional' : ' · required');
+          copy.appendChild(strong);
+          copy.appendChild(small);
+          item.appendChild(number);
+          item.appendChild(copy);
+          form.appendChild(item);
         });
       }
 
       function collectPayload() {
-        var features = {};
-        var toggles = document.querySelectorAll('.feature-toggle');
-        Array.prototype.forEach.call(toggles, function (toggle) {
-          features[toggle.getAttribute('data-feature')] = toggle.checked;
-        });
-
-        return {
-          prefix: valueOf('prefix'),
-          punishment: valueOf('punishment'),
-          raidPunishment: valueOf('raidPunishment'),
-          logChannel: valueOf('logChannel'),
-          autoRoleId: valueOf('autoRoleId'),
-          autoRoleBotId: valueOf('autoRoleBotId'),
-          boosterRoleId: valueOf('boosterRoleId'),
-          antiNukeEnabled: isChecked('antiNukeEnabled'),
-          aiEnabled: isChecked('aiEnabled'),
-          aiScanMessages: isChecked('aiScanMessages'),
-          aiModel: valueOf('aiModel'),
-          aiAction: valueOf('aiAction'),
-          aiConfidence: parseFloat(valueOf('aiConfidence')),
-          economyDaily: parseInt(valueOf('economyDaily'), 10) || 100,
-          economyInvite: parseInt(valueOf('economyInvite'), 10) || 0,
-          features: features
+        var payload = {
+          prefix: value('prefix'),
+          punishment: value('punishment') || value('punishmentSettings'),
+          raidPunishment: value('raidPunishment'),
+          antiNukeEnabled: checked('antiNukeEnabled'),
+          aiEnabled: checked('aiEnabled'),
+          aiScanMessages: checked('aiScanMessages'),
+          aiModel: value('aiModel'),
+          aiConfidence: value('aiConfidence'),
+          aiAction: value('aiAction'),
+          economyDaily: value('economyDaily'),
+          economyInvite: value('economyInvite'),
+          logChannel: value('logChannel'),
+          autoRoleId: value('autoRoleId'),
+          autoRoleBotId: value('autoRoleBotId'),
+          boosterRoleId: value('boosterRoleId'),
+          ticketPanelChannel: value('ticketPanelChannel'),
+          ticketStaffRole: value('ticketStaffRole'),
+          ticketStaffRoles: value('ticketStaffRoles').split(/[,\s]+/).filter(Boolean),
+          ticketNamePattern: value('ticketNamePattern'),
+          ticketAiEnabled: value('ticketAiEnabled') === 'true',
+          ticketCategory: value('ticketCategory'),
+          ticketLogChannel: value('ticketLogChannel'),
+          ticketPanelTitle: value('ticketPanelTitle'),
+          ticketPanelDescription: value('ticketPanelDescription'),
+          ticketPanelFooter: value('ticketPanelFooter'),
+          ticketCreateLabel: value('ticketCreateLabel'),
+          ticketCreateEmoji: value('ticketCreateEmoji'),
+          ticketButtons: ticketButtons,
+          applicationChannel: value('applicationChannel'),
+          staffApplyAcceptRole: value('staffApplyAcceptRole'),
+          staffApplyAcceptRoles: value('staffApplyAcceptRoles').split(/[,\s]+/).filter(Boolean),
+          appealInviteChannel: value('appealInviteChannel'),
+          warningKickThreshold: value('warningKickThreshold'),
+          staffApplyPanelTitle: value('staffApplyPanelTitle'),
+          staffApplyPanelDescription: value('staffApplyPanelDescription'),
+          staffApplyPanelFooter: value('staffApplyPanelFooter'),
+          staffApplyButtonLabel: value('staffApplyButtonLabel'),
+          staffApplyButtonEmoji: value('staffApplyButtonEmoji'),
+          staffApplyModalTitle: value('staffApplyModalTitle'),
+          staffApplyAcceptMessage: value('staffApplyAcceptMessage'),
+          staffApplyDenyMessage: value('staffApplyDenyMessage'),
+          staffApplyQuestions: staffQuestions,
+          features: {}
         };
+        document.querySelectorAll('.feature-toggle[data-feature]').forEach(function (input) {
+          payload.features[input.getAttribute('data-feature')] = input.checked;
+        });
+        return payload;
       }
 
-      function saveSettings(button) {
-        var original = button ? button.textContent : 'Save Changes';
-        if (button) {
-          button.disabled = true;
-          button.textContent = 'Saving...';
-        }
-
-        fetch('/api/server/' + serverId + '/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(collectPayload())
-        }).then(function (response) {
-          return response.json();
-        }).then(function (data) {
-          if (data && data.ok) {
-            showToast('Settings saved for this server.', 'ok');
-          } else {
-            showToast((data && data.error) || 'Could not save settings.', 'error');
-          }
-        }).catch(function (err) {
-          showToast('Network error: ' + err.message, 'error');
-        }).then(function () {
-          if (button) {
-            button.disabled = false;
-            button.textContent = original;
-          }
+      function setSaving(state) {
+        saving = state;
+        document.querySelectorAll('[data-save], [data-publish]').forEach(function (button) {
+          button.disabled = state;
         });
       }
 
-      var saveTop = byId('saveTop');
-      var saveBottom = byId('saveBottom');
-      if (saveTop) saveTop.addEventListener('click', function () { saveSettings(saveTop); });
-      if (saveBottom) saveBottom.addEventListener('click', function () { saveSettings(saveBottom); });
-
-      var testButton = byId('aiTestBtn');
-      if (testButton) {
-        testButton.addEventListener('click', function () {
-          var text = valueOf('aiTestText');
-          var box = byId('aiTestResult');
-          if (!text) {
-            showToast('Enter a message to test first.', 'error');
-            return;
-          }
-
-          testButton.disabled = true;
-          testButton.textContent = 'Testing...';
-          if (box) {
-            box.className = 'ai-result';
-            box.textContent = 'Asking the AI...';
-          }
-
-          fetch('/api/ai/test', {
+      async function saveSettings() {
+        if (saving) return false;
+        setSaving(true);
+        try {
+          var response = await fetch('/api/server/' + Z.serverId + '/update', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ serverId: serverId, text: text })
-          }).then(function (response) {
-            return response.json();
-          }).then(function (data) {
-            if (!box) return;
-            if (!data || !data.ok) {
-              box.className = 'ai-result error';
-              box.textContent = (data && data.error) || 'The AI test failed.';
-              return;
-            }
-
-            var verdict = String(data.verdict || 'uncertain').toUpperCase();
-            var confidence = Math.round((data.confidence || 0) * 100);
-            box.className = 'ai-result ' + (data.verdict === 'legit' ? 'ok' : 'warn');
-            box.innerHTML =
-              '<div class="ai-result-top"><strong>' + escapeHtml(verdict) + '</strong>' +
-              '<span>' + confidence + '%</span></div>' +
-              '<p>' + escapeHtml(data.reason || 'No reason returned.') + '</p>' +
-              '<small>' + escapeHtml(data.model || 'unknown model') + ' | ' +
-              escapeHtml(data.category || 'none') + ' | action: ' +
-              escapeHtml(data.action || 'none') + '</small>';
-          }).catch(function (err) {
-            if (box) {
-              box.className = 'ai-result error';
-              box.textContent = 'Network error: ' + err.message;
-            }
-          }).then(function () {
-            testButton.disabled = false;
-            testButton.textContent = 'Run Test';
+            body: JSON.stringify(collectPayload())
           });
+          var data = await response.json().catch(function () { return {}; });
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Could not save settings.');
+          markSaved();
+          toast('Settings saved', 'success');
+          return true;
+        } catch (error) {
+          toast(error.message || 'Could not save settings.', 'error');
+          return false;
+        } finally {
+          setSaving(false);
+        }
+      }
+
+      async function publishPanel(type) {
+        if (!Z.botTokenConfigured) {
+          toast('Add BOT_TOKEN to the dashboard .env to publish panels here.', 'error');
+          return;
+        }
+        var saved = await saveSettings();
+        if (!saved) return;
+        setSaving(true);
+        try {
+          var channelId = type === 'ticket' ? value('ticketPanelChannel') : value('applicationChannel');
+          var response = await fetch('/api/server/' + Z.serverId + '/' + type + '/panel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channelId: channelId })
+          });
+          var data = await response.json().catch(function () { return {}; });
+          if (!response.ok || !data.ok) throw new Error(data.error || 'Could not publish the panel.');
+          toast('Panel published to Discord', 'success');
+        } catch (error) {
+          toast(error.message || 'Could not publish the panel.', 'error');
+        } finally {
+          setSaving(false);
+        }
+      }
+
+      document.querySelectorAll('[data-save]').forEach(function (button) {
+        button.addEventListener('click', saveSettings);
+      });
+      document.querySelectorAll('[data-publish]').forEach(function (button) {
+        button.addEventListener('click', function () { publishPanel(button.getAttribute('data-publish')); });
+      });
+
+      document.querySelectorAll('[data-appeal-action]').forEach(function (button) {
+        button.addEventListener('click', async function () {
+          var action = button.getAttribute('data-appeal-action');
+          var caseId = button.getAttribute('data-case-id');
+          if (!caseId) return;
+          button.disabled = true;
+          try {
+            var response = await fetch('/api/server/' + Z.serverId + '/appeal/' + encodeURIComponent(caseId), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: action })
+            });
+            var data = await response.json().catch(function () { return {}; });
+            if (!response.ok || !data.ok) throw new Error(data.error || 'Could not review the appeal.');
+            toast(action === 'approve' ? 'Appeal approved - DM with invite sent' : 'Appeal denied', 'success');
+            setTimeout(function () { window.location.reload(); }, 900);
+          } catch (error) {
+            toast(error.message || 'Could not review the appeal.', 'error');
+            button.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-staff-action]').forEach(function (button) {
+        button.addEventListener('click', async function () {
+          var action = button.getAttribute('data-staff-action');
+          var userId = button.getAttribute('data-staff-user');
+          var roleInput = byId('staffRole-' + userId);
+          var roleId = roleInput ? roleInput.value.trim() : '';
+          if (action !== 'remove' && !roleId) {
+            toast('Enter the staff role ID first.', 'error');
+            if (roleInput) roleInput.focus();
+            return;
+          }
+          button.disabled = true;
+          try {
+            var response = await fetch('/api/server/' + Z.serverId + '/staff/action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: action, userId: userId, roleId: roleId })
+            });
+            var data = await response.json().catch(function () { return {}; });
+            if (!response.ok || !data.ok) throw new Error(data.error || 'Could not update the staff member.');
+            toast('Staff action applied', 'success');
+          } catch (error) {
+            toast(error.message || 'Could not update the staff member.', 'error');
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
+
+
+      if (byId('addTicketButton')) {
+        byId('addTicketButton').addEventListener('click', function () {
+          if (ticketButtons.length >= 9) {
+            toast('Discord panels support up to 9 custom buttons.', 'error');
+            return;
+          }
+          ticketButtons.push({ label: 'New button', emoji: '🎫', message: 'Tell us how we can help', style: 'secondary' });
+          renderTicketButtons();
+          updateTicketPreview();
+          markDirty();
         });
       }
+
+      if (byId('addStaffQuestion')) {
+        byId('addStaffQuestion').addEventListener('click', function () {
+          if (staffQuestions.length >= 5) {
+            toast('Discord modals support up to 5 questions.', 'error');
+            return;
+          }
+          staffQuestions.push({ label: 'New question', placeholder: 'Type your answer', style: 'short', required: true, maxLength: 100 });
+          renderStaffQuestions();
+          updateStaffPreview();
+          markDirty();
+        });
+      }
+
+      ['ticketPanelTitle', 'ticketPanelDescription', 'ticketPanelFooter', 'ticketCreateLabel', 'ticketCreateEmoji'].forEach(function (id) {
+        var el = byId(id);
+        if (el) el.addEventListener('input', updateTicketPreview);
+      });
+      ['staffApplyPanelTitle', 'staffApplyPanelDescription', 'staffApplyPanelFooter', 'staffApplyButtonLabel', 'staffApplyButtonEmoji'].forEach(function (id) {
+        var el = byId(id);
+        if (el) el.addEventListener('input', updateStaffPreview);
+      });
+
+      var confidence = byId('aiConfidence');
+      if (confidence) {
+        confidence.addEventListener('input', function () {
+          if (byId('aiConfidenceValue')) byId('aiConfidenceValue').textContent = Math.round(Number(confidence.value) * 100) + '%';
+        });
+      }
+
+      var punishmentMain = byId('punishment');
+      var punishmentMirror = byId('punishmentSettings');
+      if (punishmentMain && punishmentMirror) {
+        punishmentMain.addEventListener('change', function () { punishmentMirror.value = punishmentMain.value; });
+        punishmentMirror.addEventListener('change', function () { punishmentMain.value = punishmentMirror.value; });
+      }
+
+      if (byId('aiTestBtn')) {
+        byId('aiTestBtn').addEventListener('click', async function () {
+          var text = value('aiTestText').trim();
+          var result = byId('aiTestResult');
+          if (!text) {
+            toast('Enter a message to test.', 'error');
+            return;
+          }
+          byId('aiTestBtn').disabled = true;
+          result.innerHTML = '<div class="ai-result muted">Thinking…</div>';
+          try {
+            var response = await fetch('/api/ai/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ serverId: Z.serverId, text: text })
+            });
+            var data = await response.json().catch(function () { return {}; });
+            result.innerHTML = '';
+            var card = document.createElement('div');
+            card.className = 'ai-result ' + (data.ok ? 'ok' : 'bad');
+            var title = document.createElement('strong');
+            title.textContent = data.ok ? ((data.verdict || 'uncertain') + ' · ' + (data.action || 'none')) : 'AI test failed';
+            var reason = document.createElement('p');
+            reason.textContent = data.ok
+              ? 'Confidence ' + Math.round(Number(data.confidence || 0) * 100) + '% · ' + (data.reason || 'No reason returned.')
+              : (data.error || 'No response.');
+            card.appendChild(title);
+            card.appendChild(reason);
+            result.appendChild(card);
+          } catch (error) {
+            result.innerHTML = '';
+            var card = document.createElement('div');
+            card.className = 'ai-result bad';
+            card.textContent = error.message || 'AI test failed.';
+            result.appendChild(card);
+          } finally {
+            byId('aiTestBtn').disabled = false;
+          }
+        });
+      }
+
+      form.addEventListener('input', markDirty);
+      form.addEventListener('change', markDirty);
+      form.addEventListener('submit', function (event) { event.preventDefault(); });
+      window.addEventListener('beforeunload', function (event) {
+        if (!dirty) return;
+        event.preventDefault();
+        event.returnValue = '';
+      });
+
+      renderTicketButtons();
+      renderStaffQuestions();
+      updateTicketPreview();
+      updateStaffPreview();
     })();
   </script>
 </body>

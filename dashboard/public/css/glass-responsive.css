@@ -1,0 +1,80 @@
+/* Zyron glass UI — responsive layout */
+
+@media (max-width: 1180px) {
+  .sidebar { width: 248px; flex-basis: 248px; }
+  .main { padding: 82px 24px 72px 20px; }
+  .status-tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .home-hero { grid-template-columns: 1fr; }
+  .hero-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .preview-card { position: static; }
+}
+
+@media (max-width: 900px) {
+  body.app { display: block; }
+  .sidebar {
+    position: relative;
+    top: 0;
+    width: auto;
+    height: auto;
+    max-height: none;
+    margin: 12px;
+    padding: 14px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    border-radius: 22px;
+    overflow: visible;
+  }
+  .brand { padding: 0; }
+  .brand-mark { width: 36px; height: 36px; border-radius: 12px; }
+  .brand-text small, .sidebar-status, .sidebar-tip, .sidebar-help, .sidebar-back, .server-identity, .nav-label, .sidebar-spacer { display: none; }
+  .nav { flex-direction: row; flex: 1 1 100%; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav-item { flex: 0 0 auto; padding: 8px 10px; font-size: 11px; }
+  .nav-item .nav-icon { display: none; }
+  .nav-pill { display: none; }
+  .sidebar-user { margin-left: auto; padding: 5px; background: transparent; border: 0; }
+  .sidebar-user-copy { display: none; }
+  .main { padding: 82px 16px 96px; max-width: none; }
+  .home-topbar, .server-topbar, .panel-head { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .topbar-actions { justify-content: flex-start; }
+  .home-hero { padding: 24px; }
+  .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overview-hero { flex-direction: column; align-items: flex-start; }
+  .overview-hero-stats { width: 100%; justify-content: space-between; }
+  .mini-stat { text-align: left; }
+  .overview-grid, .panel-grid.two, .panel-grid.two-one { grid-template-columns: 1fr; }
+  .status-tile-grid { grid-template-columns: 1fr; }
+  .section-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .giveaway-hero { flex-direction: column; align-items: flex-start; }
+  .giveaway-orb { width: 78px; height: 78px; flex-basis: 78px; border-radius: 24px; }
+  .sticky-save { left: 16px; right: 16px; transform: none; max-width: none; justify-content: space-between; }
+  .page-footer { flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 620px) {
+  .notch { top: 8px; padding: 6px 11px; font-size: 10px; gap: 6px; }
+  .notch-meta, .notch-divider { display: none; }
+  .main { padding: 74px 12px 92px; }
+  .sidebar { margin: 8px; }
+  .home-topbar h1, .server-topbar h1 { font-size: 25px; }
+  .hero-copy h2 { font-size: 32px; }
+  .hero-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric-card { padding: 12px; }
+  .metric-card strong { font-size: 20px; }
+  .status-grid { grid-template-columns: 1fr; }
+  .server-grid, .feature-card-grid { grid-template-columns: 1fr; }
+  .field-grid.two, .row-grid { grid-template-columns: 1fr; }
+  .row-grid .span-2, .row-grid .span-3 { grid-column: auto; }
+  .policy-grid { grid-template-columns: 1fr; }
+  .panel-head h2 { font-size: 24px; }
+  .card { padding: 16px; border-radius: 20px; }
+  .home-hero { padding: 20px; border-radius: 20px; }
+  .section-head h2 { font-size: 21px; }
+  .command-grid { grid-template-columns: 1fr; }
+  .sticky-save-copy { display: none; }
+  .sticky-save { justify-content: center; }
+  .toast { left: 12px; right: 12px; bottom: 84px; max-width: none; }
+  .login-card { padding: 24px; border-radius: 24px; }
+}

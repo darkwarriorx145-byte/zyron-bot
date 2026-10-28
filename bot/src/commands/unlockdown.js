@@ -27,7 +27,7 @@ module.exports = {
 
     const embed = ZyronEmbedBuilder.base({
       color: config.colors.success,
-      title: '🔓 SERVER LOCKDOWN LIFTED',
+      title: ZyronEmbedBuilder.emoji('unlock') + ' SERVER LOCKDOWN LIFTED',
       description:
         '**Restored Channels:** ' + result.count + '\n' +
         '**Moderator:** ' + message.author.tag + '\n\n' +

@@ -120,6 +120,30 @@ const FEATURES = [
   }
 ];
 
+const FEATURE_EMOJIS = {
+  antiBan: 'ban',
+  antiKick: 'kick',
+  antiBotAdd: 'ai',
+  antiChannelCreate: 'channel',
+  antiChannelDelete: 'trash',
+  antiChannelUpdate: 'settings',
+  antiRoleCreate: 'role',
+  antiRoleDelete: 'trash',
+  antiRoleUpdate: 'settings',
+  antiWebhook: 'link',
+  antiEveryone: 'mention',
+  antiGuildUpdate: 'server',
+  antiIntegration: 'settings',
+  antiMemberUpdate: 'user',
+  antiPrune: 'purge',
+  antiDangerousPermissionUpdate: 'warning',
+  antiSpam: 'mute',
+  antiLink: 'link',
+  antiBetrayal: 'whitelist',
+  antiAbuse: 'warning',
+  antiRaid: 'raid'
+};
+
 function getFeature(key) {
   return FEATURES.find(function (item) {
     return item.key === key;
@@ -182,6 +206,7 @@ function buildMain(guild) {
       new StringSelectMenuOptionBuilder()
         .setLabel(feature.label)
         .setDescription(feature.description)
+        .setEmoji(ZyronEmbedBuilder.emoji(FEATURE_EMOJIS[feature.key] || 'shield'))
         .setValue(feature.key)
     );
   });
@@ -226,11 +251,13 @@ function buildDetail(guild, key, note) {
   const backButton = new ButtonBuilder()
     .setCustomId('featurewl:back')
     .setLabel('Back')
+    .setEmoji(ZyronEmbedBuilder.emoji('arrow'))
     .setStyle(ButtonStyle.Secondary);
 
   const clearButton = new ButtonBuilder()
     .setCustomId('featurewl:clear:' + key)
     .setLabel('Clear All')
+    .setEmoji(ZyronEmbedBuilder.emoji('trash'))
     .setStyle(ButtonStyle.Danger)
     .setDisabled(list.length === 0);
 
@@ -263,11 +290,13 @@ function buildClearConfirm(guild, key) {
   const yesButton = new ButtonBuilder()
     .setCustomId('featurewl:clearyes:' + key)
     .setLabel('Yes, clear it')
+    .setEmoji(ZyronEmbedBuilder.emoji('check'))
     .setStyle(ButtonStyle.Danger);
 
   const noButton = new ButtonBuilder()
     .setCustomId('featurewl:cancel:' + key)
     .setLabel('Cancel')
+    .setEmoji(ZyronEmbedBuilder.emoji('cross'))
     .setStyle(ButtonStyle.Secondary);
 
   return {

@@ -1,5 +1,6 @@
 const { PermissionsBitField } = require('discord.js');
 const ZyronEmbedBuilder = require('../../src/utils/embedBuilder');
+const protection = require('../utils/protection');
 const config = require('../../config.json');
 
 module.exports = {
@@ -18,6 +19,10 @@ module.exports = {
 
     if (!reason) {
       return message.reply({ embeds: [ZyronEmbedBuilder.error('Reason Required', 'Provide a reason for this ban. Example: ' + config.prefix + 'ban @user raiding')] });
+    }
+
+    if (protection.isProtectedUser(target.id)) {
+      return message.reply({ embeds: [ZyronEmbedBuilder.warning('Protected User', 'The main owner and main admin are protected from moderation actions and cannot be banned.')] });
     }
 
     if (target.id === message.author.id) {

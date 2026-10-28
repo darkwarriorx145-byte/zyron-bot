@@ -1,0 +1,81 @@
+<%
+  var page = typeof activePage !== 'undefined' ? activePage : 'home';
+  var navClass = function (key) { return 'nav-item' + (page === key ? ' active' : ''); };
+%>
+<aside class="sidebar home-sidebar">
+  <a class="brand" href="/dashboard">
+    <span class="brand-mark"><%- include('icon', { name: 'shield', size: 22 }) %></span>
+    <span class="brand-text">
+      <strong>Zyron</strong>
+      <small>Control Center</small>
+    </span>
+  </a>
+
+  <div class="sidebar-status">
+    <span class="status-dot"></span>
+    <span>All systems operational</span>
+  </div>
+
+  <nav class="nav">
+    <span class="nav-label">Workspace</span>
+    <a class="<%= navClass('home') %>" href="/dashboard#overview">
+      <span class="nav-icon"><%- include('icon', { name: 'home', size: 18 }) %></span>
+      <span>Overview</span>
+    </a>
+    <a class="<%= navClass('servers') %>" href="/dashboard#servers">
+      <span class="nav-icon"><%- include('icon', { name: 'server', size: 18 }) %></span>
+      <span>Your servers</span>
+    </a>
+    <a class="<%= navClass('features') %>" href="/dashboard#features">
+      <span class="nav-icon"><%- include('icon', { name: 'layers', size: 18 }) %></span>
+      <span>Feature library</span>
+    </a>
+    <a class="<%= navClass('status') %>" href="/dashboard#status">
+      <span class="nav-icon"><%- include('icon', { name: 'activity', size: 18 }) %></span>
+      <span>System status</span>
+    </a>
+
+    <span class="nav-label">Account</span>
+    <% if (user && user.isMainAdmin) { %>
+      <a class="<%= navClass('admin') %>" href="/admin">
+        <span class="nav-icon"><%- include('icon', { name: 'crown', size: 18 }) %></span>
+        <span>Main admin</span>
+        <span class="nav-pill">Owner</span>
+      </a>
+    <% } %>
+    <a class="<%= navClass('link') %>" href="/link-test">
+      <span class="nav-icon"><%- include('icon', { name: 'link', size: 18 }) %></span>
+      <span>Connection test</span>
+    </a>
+    <a class="nav-item" href="<%= brand.invite %>" target="_blank" rel="noopener">
+      <span class="nav-icon"><%- include('icon', { name: 'message-circle', size: 18 }) %></span>
+      <span>Support server</span>
+      <span class="nav-icon nav-external"><%- include('icon', { name: 'external-link', size: 13 }) %></span>
+    </a>
+    <a class="nav-item" href="/logout">
+      <span class="nav-icon"><%- include('icon', { name: 'log-out', size: 18 }) %></span>
+      <span>Sign out</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-spacer"></div>
+
+  <div class="sidebar-tip">
+    <span class="tip-icon"><%- include('icon', { name: 'sparkles', size: 16 }) %></span>
+    <div>
+      <strong>Glassy by default</strong>
+      <small>Every setting is isolated per server.</small>
+    </div>
+  </div>
+
+  <% if (user) { %>
+    <div class="sidebar-user">
+      <span class="avatar"><img src="<%= user.avatarUrl %>" alt=""></span>
+      <span class="sidebar-user-copy">
+        <strong><%= user.displayName %></strong>
+        <small><%= user.isMainAdmin ? 'Main administrator' : 'Server manager' %></small>
+      </span>
+      <a class="icon-btn ghost" href="/logout" title="Sign out"><%- include('icon', { name: 'log-out', size: 16 }) %></a>
+    </div>
+  <% } %>
+</aside>

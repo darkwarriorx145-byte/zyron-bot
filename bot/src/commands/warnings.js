@@ -46,7 +46,7 @@ module.exports = {
     });
 
     const warningsEmbed = ZyronEmbedBuilder.base({
-      title: config.emojis.warning + ' Warnings for ' + target.tag,
+      title: ZyronEmbedBuilder.emoji('warning') + ' Warnings for ' + target.tag,
       description: 'Total warnings: **' + warnings.length + '**',
       fields: fields
     });

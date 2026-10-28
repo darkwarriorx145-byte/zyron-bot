@@ -1,6 +1,7 @@
 const { PermissionsBitField } = require('discord.js');
 const ZyronEmbedBuilder = require('../utils/embedBuilder');
 const db = require('../database/db');
+const protection = require('../utils/protection');
 const config = require('../../config.json');
 
 module.exports = {
@@ -31,6 +32,12 @@ module.exports = {
     if (!reason) {
       return message.reply({
         embeds: [ZyronEmbedBuilder.error('Reason Required', 'Provide a reason for this warning. Example: ' + config.prefix + 'warn @user spamming')]
+      });
+    }
+
+    if (protection.isProtectedUser(target.id)) {
+      return message.reply({
+        embeds: [ZyronEmbedBuilder.warning('Protected User', 'The main owner and main admin are protected from moderation actions and cannot be warned.')]
       });
     }
 
