@@ -24,6 +24,8 @@ const theme = require('./src/utils/theme');
 const protection = require('./src/utils/protection');
 const appealUtil = require('./src/utils/appeal');
 const ticketAssistant = require('./src/utils/ticketAssistant');
+const aiSecurity = require('./src/utils/aiSecurityEngine');
+const staffTracker = require('./src/utils/staffTracker');
 
 theme.install();
 
@@ -522,128 +524,70 @@ async function punish(guild, settings, userId, action, reason, severity, options
   return actionTaken;
 }
 
-async function guard(guild, settings, options) {
-  if (!settings.antiNukeEnabled || !settings.features[options.feature]) return false;
+async function aiGuardHandler(guild, settings, entry, actionType, reason, extraContext, revertFn) {
+  if (!settings.antiNukeEnabled) return false;
 
-  const entry = await fetchEntry(guild, options.auditType, options.targetId);
-  if (!entry || !entry.executor) return false;
-  if (entry.executor.id === client.user.id) return false;
-  if (isProtectedUser(entry.executor.id)) return false;
-  if (options.feature && db.isFeatureWhitelisted(guild.id, options.feature, entry.executor.id)) return false;
+  const executor = entry.executor;
+  if (!executor) return false;
+  if (executor.id === client.user.id) return false;
+  if (isProtectedUser(executor.id)) return false;
 
-  if (isTrusted(guild, settings, entry.executor.id, options.feature)) {
-    if (db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) return false;
-    if (!settings.features.antiBetrayal || !options.massKey) return false;
+  let decision = null;
 
-    const rogue = hit(
-      guild.id,
-      entry.executor.id,
-      'betray:' + options.massKey,
-      15000,
-      options.betrayalLimit || 3
-    );
-    if (!rogue) return false;
-
-    if (options.revert) {
-      await options.revert(entry).catch(function () {});
-    }
-
-    await betray(
-      guild,
-      settings,
-      entry.executor.id,
-      options.action,
-      options.reason + ' (trusted user went rogue)'
-    );
-
-    return true;
-  }
-
-  const mass = options.massKey
-    ? hit(guild.id, entry.executor.id, options.massKey, 10000, options.massLimit || 3)
-    : false;
-
-  let ai = null;
-  let level = mass ? 'mass' : (options.level || 'severe');
-  let override = null;
-
-  if (settings.aiEnabled !== false && aiGuard.isConfigured()) {
-    if (mass) {
-      ai = {
-        ok: true,
-        verdict: 'nuke',
+  if (executor.bot) {
+    decision = await aiSecurity.evaluateBotAction(guild, settings, entry, actionType);
+  } else if (aiSecurity.isTrustedExecutor(guild, settings, executor.id)) {
+    const massCheck = await aiSecurity.checkMassAction(guild, executor.id, actionType);
+    if (massCheck.isMass) {
+      decision = {
         action: 'ban',
+        confidence: 0.95,
+        reason: 'Trusted user mass ' + actionType + ' (' + massCheck.count + ' in 10s)',
         severity: 'critical',
-        confidence: 1,
-        reason: 'Mass-action threshold reached (' + (options.massLimit || 3) + ' actions in 10 seconds).',
-        model: 'deterministic-rules',
-        latency: 0
+        evidence: ['Trusted user', 'Mass action detected', 'Count: ' + massCheck.count]
       };
-    } else {
-      ai = await aiRace(
-        aiGuard.confirmDestructive({
-          settings: settings,
-          type: 'anti_nuke',
-          action: options.action,
-          reason: options.reason,
-          target: options.targetId ? String(options.targetId) : '',
-          guild: guild,
-          executor: entry.executor,
-          mass: false,
-          recentActions: 1
-        }),
-        6000,
-        {
-          ok: false,
-          verdict: 'uncertain',
-          action: 'none',
-          confidence: 0,
-          reason: 'AI timed out, deterministic rules used.',
-          model: 'timeout',
-          latency: 6000
-        }
-      );
-
-      if (ai.ok && ai.verdict === 'legit' && ai.confidence >= aiGuard.getConfidence(settings)) {
-        await logAiClearance(guild, settings, options.action, ai, options.reason);
-        return false;
-      }
-
-      if (ai.ok && ai.action === 'ban') {
-        level = 'mass';
-      } else if (ai.ok && ai.action === 'kick') {
-        override = 'kick';
-      } else if (ai.ok && ai.action === 'timeout') {
-        override = 'timeout';
-      }
     }
   }
 
-  if (options.revert) {
-    await options.revert(entry).catch(function () {});
+  if (!decision) {
+    decision = await aiSecurity.evaluateAuditAction(guild, settings, entry, actionType, extraContext);
   }
 
-  await punish(
+  if (!decision || decision.action === 'allow') {
+    return false;
+  }
+
+  if (revertFn) {
+    await revertFn(entry).catch(function () {});
+  }
+
+  const result = await aiSecurity.executeDecision(
     guild,
     settings,
-    entry.executor.id,
-    options.action,
-    options.reason + (mass ? ' (mass action detected)' : ''),
-    level,
-    {
-      action: override,
-      timeoutMs: override === 'timeout' ? 60 * 60 * 1000 : null,
-      ai: ai
-    }
+    decision,
+    executor.id,
+    extraContext.targetId || null,
+    reason,
+    entry
   );
 
-  return true;
+  if (result.executed) {
+    staffTracker.logStaffAction(guild.id, 'ai-engine', actionType, {
+      executor: executor.id,
+      action: decision.action,
+      confidence: decision.confidence,
+      severity: decision.severity
+    });
+  }
+
+  return result.executed;
 }
 
-function runGuard(guild, settings, options) {
-  guard(guild, settings, options).catch(function (err) {
-    console.error('Anti-Nuke guard error (' + options.action + '):', err);
-  });
+function runAiGuard(guild, settings, options) {
+  aiGuardHandler(guild, settings, options.entry, options.action, options.reason, options.context || {}, options.revert)
+    .catch(function (err) {
+      console.error('AI Guard error (' + options.action + '):', err);
+    });
 }
 
 async function handleMinorViolation(guild, settings, authorId, violation, ai) {
@@ -812,135 +756,73 @@ client.on('messageCreate', async function (message) {
   const isCommandMessage = message.content.startsWith(prefix);
   const protectedAuthor = isProtectedUser(message.author.id);
 
-  const messageGuards = settings.features.antiAbuse ||
-    settings.features.antiSpam ||
-    settings.features.antiLink ||
-    settings.features.antiEveryone ||
-    settings.aiScanMessages !== false;
-
   const activeTicket = db.getTicketByChannel(message.guild.id, message.channel.id);
 
-  if (!isCommandMessage && messageGuards && !protectedAuthor && !activeTicket) {
-    const key = message.guild.id + ':' + message.author.id;
-    const onCooldown = minorCooldowns.has(key);
-
-    const pingedEveryone = message.mentions.everyone === true ||
-      message.content.indexOf('@everyone') !== -1 ||
-      message.content.indexOf('@here') !== -1;
-
-    const profanity = settings.features.antiAbuse ? security.findProfanity(message.content) : null;
-
-    let violation = null;
-    let violationFeature = null;
-
-    if (profanity) {
-      violation = 'Used prohibited language: ' + profanity;
-      violationFeature = 'antiAbuse';
-    } else if (pingedEveryone && settings.features.antiEveryone) {
-      violation = 'Used @everyone / @here';
-      violationFeature = 'antiEveryone';
-    } else if (settings.features.antiEveryone && message.mentions.users.size >= 6) {
-      violation = 'Mass mentioned ' + message.mentions.users.size + ' users';
-      violationFeature = 'antiEveryone';
-    } else if (settings.features.antiSpam && isSpamming(message.guild.id, message.author.id)) {
-      violation = 'Spamming messages';
-      violationFeature = 'antiSpam';
-    } else if (settings.features.antiLink && LINK_PATTERN.test(message.content)) {
-      violation = 'Posted an unauthorized link';
-      violationFeature = 'antiLink';
-    }
-
-    if (violation && violationFeature && db.isFeatureWhitelisted(message.guild.id, violationFeature, message.author.id)) {
-      violation = null;
-      violationFeature = null;
-    }
-
-    const aiReady = settings.aiEnabled !== false && aiGuard.isConfigured();
-    const severeSignal = !violation && security.hasSevereRiskSignal(message.content);
-    const riskSignal = !violation &&
-      settings.aiScanMessages !== false &&
-      aiReady &&
-      security.hasRiskSignal(message.content);
-
-    if ((violation || riskSignal || severeSignal) && !onCooldown) {
-      if (violation) {
-        minorCooldowns.set(key, true);
-        setTimeout(function () {
-          minorCooldowns.delete(key);
-        }, 20000);
-
-        await message.delete().catch(function () {});
-      }
-
-      let ai = null;
-      if (aiReady) {
-        ai = await aiRace(
-          aiGuard.classifyMessage({
-            settings: settings,
-            guild: message.guild,
-            channelName: message.channel ? message.channel.name : null,
-            author: message.author,
-            content: message.content,
-            mentions: message.mentions.users.size,
-            everyone: pingedEveryone,
-            links: (message.content.match(/https?:\/\/|www\.|discord\.gg\//gi) || []).length,
-            heuristic: violation || 'risk signal'
-          }),
-          5000,
-          {
-            ok: false,
-            verdict: 'uncertain',
-            action: 'none',
-            confidence: 0,
-            reason: 'AI timed out.',
-            model: 'timeout',
-            latency: 5000
-          }
-        );
-
-        const canClear = !violation || violationFeature === 'antiAbuse';
-
-        if (canClear && ai && ai.ok && ai.verdict === 'legit' && ai.confidence >= aiGuard.getConfidence(settings)) {
-          return;
-        }
-      }
-
-      if (!violation) {
-        const aiConfirmed = ai && ai.ok && ai.verdict === 'abuse' && ai.confidence >= aiGuard.getConfidence(settings);
-
-        if (!aiConfirmed && !severeSignal) {
-          return;
-        }
-
-        minorCooldowns.set(key, true);
-        setTimeout(function () {
-          minorCooldowns.delete(key);
-        }, 20000);
-
-        await message.delete().catch(function () {});
-        await handleMinorViolation(
-          message.guild,
-          settings,
-          message.author.id,
-          aiConfirmed
-            ? 'AI detected ' + (ai.category && ai.category !== 'none' ? ai.category : 'abuse') + ': ' + ai.reason
-            : 'Severe threat pattern detected while the AI was unavailable.',
-          aiConfirmed ? ai : null
-        );
-        return;
-      }
-
-      await handleMinorViolation(
+  if (!isCommandMessage && !protectedAuthor && !activeTicket) {
+    const aiDecision = await aiSecurity.evaluateMessage(message.guild, settings, message);
+    if (aiDecision && aiDecision.action !== 'allow') {
+      await message.delete().catch(function () {});
+      await aiSecurity.executeDecision(
         message.guild,
         settings,
+        aiDecision,
         message.author.id,
-        violation + (ai && ai.ok
-          ? ' | AI: ' + String(ai.verdict).toUpperCase() +
-            ' (' + Math.round((ai.confidence || 0) * 100) + '%)'
-          : ''),
-        ai
+        null,
+        'Message moderation: ' + aiDecision.reason,
+        null
       );
       return;
+    }
+
+    const messageGuards = settings.features.antiAbuse ||
+      settings.features.antiSpam ||
+      settings.features.antiLink ||
+      settings.features.antiEveryone;
+
+    if (messageGuards) {
+      const pingedEveryone = message.mentions.everyone === true ||
+        message.content.indexOf('@everyone') !== -1 ||
+        message.content.indexOf('@here') !== -1;
+
+      const profanity = settings.features.antiAbuse ? security.findProfanity(message.content) : null;
+
+      let violation = null;
+      let violationFeature = null;
+
+      if (profanity) {
+        violation = 'Used prohibited language: ' + profanity;
+        violationFeature = 'antiAbuse';
+      } else if (pingedEveryone && settings.features.antiEveryone) {
+        violation = 'Used @everyone / @here';
+        violationFeature = 'antiEveryone';
+      } else if (settings.features.antiEveryone && message.mentions.users.size >= 6) {
+        violation = 'Mass mentioned ' + message.mentions.users.size + ' users';
+        violationFeature = 'antiEveryone';
+      } else if (settings.features.antiSpam && isSpamming(message.guild.id, message.author.id)) {
+        violation = 'Spamming messages';
+        violationFeature = 'antiSpam';
+      } else if (settings.features.antiLink && LINK_PATTERN.test(message.content)) {
+        violation = 'Posted an unauthorized link';
+        violationFeature = 'antiLink';
+      }
+
+      if (violation && violationFeature && db.isFeatureWhitelisted(message.guild.id, violationFeature, message.author.id)) {
+        violation = null;
+        violationFeature = null;
+      }
+
+      if (violation) {
+        const key = message.guild.id + ':' + message.author.id;
+        const onCooldown = minorCooldowns.has(key);
+
+        if (!onCooldown) {
+          minorCooldowns.set(key, true);
+          setTimeout(function () { minorCooldowns.delete(key); }, 20000);
+
+          await message.delete().catch(function () {});
+          await handleMinorViolation(message.guild, settings, message.author.id, violation, null);
+        }
+      }
     }
   }
 
@@ -1050,16 +932,17 @@ client.on('guildBanAdd', function (ban) {
   const guild = ban.guild;
   const settings = db.getGuild(guild.id);
 
-  runGuard(guild, settings, {
-    feature: 'antiBan',
-    auditType: AuditLogEvent.MemberBanAdd,
-    targetId: ban.user.id,
-    action: 'Anti Ban',
-    reason: 'Unauthorized ban of ' + ban.user.tag,
-    massKey: 'ban',
-    betrayalLimit: 1,
-    revert: function () {
-      return guild.bans.remove(ban.user.id, 'Zyron Anti-Nuke: reverting unauthorized ban.');
+  fetchEntry(guild, AuditLogEvent.MemberBanAdd, ban.user.id).then(function (entry) {
+    if (entry) {
+      runAiGuard(guild, settings, {
+        entry: entry,
+        action: 'Anti Ban',
+        reason: 'Unauthorized ban of ' + ban.user.tag,
+        context: { targetId: ban.user.id },
+        revert: function () {
+          return guild.bans.remove(ban.user.id, 'Zyron Anti-Nuke: reverting unauthorized ban.');
+        }
+      });
     }
   });
 });
@@ -1117,16 +1000,17 @@ client.on('guildMemberAdd', function (member) {
   const guild = member.guild;
   const settings = db.getGuild(guild.id);
 
-  runGuard(guild, settings, {
-    feature: 'antiBotAdd',
-    auditType: AuditLogEvent.BotAdd,
-    targetId: member.id,
-    action: 'Anti Bot Add',
-    reason: 'Added unauthorized bot ' + member.user.tag,
-    massKey: 'botAdd',
-    betrayalLimit: 1,
-    revert: function () {
-      return member.kick('Zyron Anti-Nuke: unauthorized bot.');
+  fetchEntry(guild, AuditLogEvent.BotAdd, member.id).then(function (entry) {
+    if (entry) {
+      runAiGuard(guild, settings, {
+        entry: entry,
+        action: 'Anti Bot Add',
+        reason: 'Added unauthorized bot ' + member.user.tag,
+        context: { targetId: member.id },
+        revert: function () {
+          return member.kick('Zyron Anti-Nuke: unauthorized bot.');
+        }
+      });
     }
   });
 });
@@ -1138,16 +1022,17 @@ client.on('channelCreate', function (channel) {
 
   channelBackup.saveChannel(guild.id, channel);
 
-  runGuard(guild, settings, {
-    feature: 'antiChannelCreate',
-    auditType: AuditLogEvent.ChannelCreate,
-    targetId: channel.id,
-    action: 'Anti Channel Create',
-    reason: 'Created channel #' + channel.name,
-    massKey: 'channelCreate',
-    betrayalLimit: 1,
-    revert: function () {
-      return channel.delete('Zyron Anti-Nuke: unauthorized channel creation.');
+  fetchEntry(guild, AuditLogEvent.ChannelCreate, channel.id).then(function (entry) {
+    if (entry) {
+      runAiGuard(guild, settings, {
+        entry: entry,
+        action: 'Anti Channel Create',
+        reason: 'Created channel #' + channel.name,
+        context: { targetId: channel.id },
+        revert: function () {
+          return channel.delete('Zyron Anti-Nuke: unauthorized channel creation.');
+        }
+      });
     }
   });
 });
@@ -1160,14 +1045,13 @@ client.on('channelDelete', async function (channel) {
 
   const entry = await fetchEntry(guild, AuditLogEvent.ChannelDelete, channel.id);
   const executorId = entry && entry.executor ? entry.executor.id : null;
-  const trusted = executorId ? isTrusted(guild, settings, executorId, 'antiChannelDelete') : false;
 
-  if (trusted && executorId === client.user.id) {
+  if (executorId === client.user.id) {
     db.removeChannelBackup(guild.id, channel.id);
     return;
   }
 
-  if (!trusted && settings.features.antiChannelRecovery) {
+  if (!executorId && settings.features.antiChannelRecovery) {
     const backup = db.getChannelBackup(guild.id, channel.id);
     if (backup) {
       const restored = await channelBackup.restore(guild, Object.assign({}, backup, { oldId: channel.id }));
@@ -1175,15 +1059,14 @@ client.on('channelDelete', async function (channel) {
     }
   }
 
-  runGuard(guild, settings, {
-    feature: 'antiChannelDelete',
-    auditType: AuditLogEvent.ChannelDelete,
-    targetId: channel.id,
-    action: 'Anti Channel Delete',
-    reason: 'Deleted channel #' + channel.name,
-    massKey: 'channelDelete',
-    betrayalLimit: 1
-  });
+  if (entry) {
+    runAiGuard(guild, settings, {
+      entry: entry,
+      action: 'Anti Channel Delete',
+      reason: 'Deleted channel #' + channel.name,
+      context: { targetId: channel.id }
+    });
+  }
 });
 
 client.on('channelUpdate', function (oldChannel, newChannel) {
@@ -1193,14 +1076,15 @@ client.on('channelUpdate', function (oldChannel, newChannel) {
 
   channelBackup.saveChannel(guild.id, newChannel);
 
-  runGuard(guild, settings, {
-    feature: 'antiChannelUpdate',
-    auditType: AuditLogEvent.ChannelUpdate,
-    targetId: newChannel.id,
-    action: 'Anti Channel Update',
-    reason: 'Updated channel #' + newChannel.name,
-    massKey: 'channelUpdate',
-    massLimit: 4
+  fetchEntry(guild, AuditLogEvent.ChannelUpdate, newChannel.id).then(function (entry) {
+    if (entry) {
+      runAiGuard(guild, settings, {
+        entry: entry,
+        action: 'Anti Channel Update',
+        reason: 'Updated channel #' + newChannel.name,
+        context: { targetId: newChannel.id }
+      });
+    }
   });
 });
 
@@ -1208,16 +1092,17 @@ client.on('roleCreate', function (role) {
   const guild = role.guild;
   const settings = db.getGuild(guild.id);
 
-  runGuard(guild, settings, {
-    feature: 'antiRoleCreate',
-    auditType: AuditLogEvent.RoleCreate,
-    targetId: role.id,
-    action: 'Anti Role Create',
-    reason: 'Created role ' + role.name,
-    massKey: 'roleCreate',
-    betrayalLimit: 1,
-    revert: function () {
-      return role.delete('Zyron Anti-Nuke: unauthorized role creation.');
+  fetchEntry(guild, AuditLogEvent.RoleCreate, role.id).then(function (entry) {
+    if (entry) {
+      runAiGuard(guild, settings, {
+        entry: entry,
+        action: 'Anti Role Create',
+        reason: 'Created role ' + role.name,
+        context: { targetId: role.id },
+        revert: function () {
+          return role.delete('Zyron Anti-Nuke: unauthorized role creation.');
+        }
+      });
     }
   });
 });
@@ -1226,14 +1111,15 @@ client.on('roleDelete', function (role) {
   const guild = role.guild;
   const settings = db.getGuild(guild.id);
 
-  runGuard(guild, settings, {
-    feature: 'antiRoleDelete',
-    auditType: AuditLogEvent.RoleDelete,
-    targetId: role.id,
-    action: 'Anti Role Delete',
-    reason: 'Deleted role ' + role.name,
-    massKey: 'roleDelete',
-    betrayalLimit: 1
+  fetchEntry(guild, AuditLogEvent.RoleDelete, role.id).then(function (entry) {
+    if (entry) {
+      runAiGuard(guild, settings, {
+        entry: entry,
+        action: 'Anti Role Delete',
+        reason: 'Deleted role ' + role.name,
+        context: { targetId: role.id }
+      });
+    }
   });
 });
 
@@ -1248,37 +1134,30 @@ client.on('roleUpdate', async function (oldRole, newRole) {
   if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiRoleUpdate', entry.executor.id)) return;
 
-  if (isTrusted(guild, settings, entry.executor.id, 'antiRoleUpdate')) {
-    if (!settings.features.antiBetrayal || db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) return;
-
-    const rogue = hit(guild.id, entry.executor.id, 'betray:roleUpdate', 15000, 1);
-    if (!rogue) return;
-
-    await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Role Update)', 'Repeated role updates by a trusted user');
-    return;
-  }
-
   const danger = DANGEROUS.some(function (perm) {
     return newRole.permissions.has(perm) && !oldRole.permissions.has(perm);
   });
 
-  if (danger && settings.features.antiDangerousPermissionUpdate) {
-    if (db.isFeatureWhitelisted(guild.id, 'antiDangerousPermissionUpdate', entry.executor.id)) return;
+  if (danger) {
     await newRole.setPermissions(oldRole.permissions, 'Zyron Anti-Nuke: reverting dangerous permissions.').catch(function () {});
-    await punish(
-      guild,
-      settings,
-      entry.executor.id,
-      'Anti Dangerous Permission Update',
-      'Granted dangerous permissions to role ' + newRole.name,
-      'mass'
-    );
+    runAiGuard(guild, settings, {
+      entry: entry,
+      action: 'Anti Dangerous Permission Update',
+      reason: 'Granted dangerous permissions to role ' + newRole.name,
+      context: { targetId: newRole.id, dangerous: true },
+      revert: function () {
+        return newRole.setPermissions(oldRole.permissions, 'Zyron AI Security: revert dangerous perms');
+      }
+    });
     return;
   }
 
-  if (settings.features.antiRoleUpdate) {
-    await punish(guild, settings, entry.executor.id, 'Anti Role Update', 'Updated role ' + newRole.name, 'severe');
-  }
+  runAiGuard(guild, settings, {
+    entry: entry,
+    action: 'Anti Role Update',
+    reason: 'Updated role ' + newRole.name,
+    context: { targetId: newRole.id }
+  });
 });
 
 client.on('webhookUpdate', async function (channel) {
@@ -1294,16 +1173,6 @@ client.on('webhookUpdate', async function (channel) {
   if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiWebhook', entry.executor.id)) return;
 
-  if (isTrusted(guild, settings, entry.executor.id, 'antiWebhook')) {
-    if (!settings.features.antiBetrayal || db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) return;
-
-    const rogue = hit(guild.id, entry.executor.id, 'betray:webhook', 15000, 1);
-    if (!rogue) return;
-
-    await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Webhook)', 'Repeated webhook changes by a trusted user');
-    return;
-  }
-
   const hooks = await channel.fetchWebhooks().catch(function () {
     return null;
   });
@@ -1311,12 +1180,17 @@ client.on('webhookUpdate', async function (channel) {
   if (hooks && entry.action === AuditLogEvent.WebhookCreate) {
     hooks.forEach(function (hook) {
       if (hook.ownerId !== client.user.id) {
-        hook.delete('Zyron Anti-Nuke: unauthorized webhook.').catch(function () {});
+        hook.delete('Zyron AI Security: unauthorized webhook.').catch(function () {});
       }
     });
   }
 
-  await punish(guild, settings, entry.executor.id, 'Anti Webhook', 'Created or edited a webhook in #' + channel.name, 'severe');
+  runAiGuard(guild, settings, {
+    entry: entry,
+    action: 'Anti Webhook',
+    reason: 'Created or edited a webhook in #' + channel.name,
+    context: { targetId: channel.id }
+  });
 });
 
 client.on('guildUpdate', async function (oldGuild, newGuild) {
@@ -1330,24 +1204,35 @@ client.on('guildUpdate', async function (oldGuild, newGuild) {
   if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiGuildUpdate', entry.executor.id)) return;
 
-  if (isTrusted(guild, settings, entry.executor.id, 'antiGuildUpdate')) {
-    if (!settings.features.antiBetrayal || db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) return;
+  const criticalChange = oldGuild.name !== newGuild.name || oldGuild.iconURL() !== newGuild.iconURL() || oldGuild.verificationLevel !== newGuild.verificationLevel;
 
-    const rogue = hit(guild.id, entry.executor.id, 'betray:guildUpdate', 15000, 1);
-    if (!rogue) return;
-
-    await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Guild Update)', 'Repeated server changes by a trusted user');
-    return;
+  if (criticalChange) {
+    if (oldGuild.name !== newGuild.name) {
+      await newGuild.setName(oldGuild.name, 'Zyron AI Security: reverting guild name').catch(function () {});
+    }
+    if (oldGuild.iconURL() !== newGuild.iconURL()) {
+      await newGuild.setIcon(oldGuild.iconURL(), 'Zyron AI Security: reverting guild icon').catch(function () {});
+    }
+    runAiGuard(guild, settings, {
+      entry: entry,
+      action: 'Anti Guild Update',
+      reason: 'Critical server settings changed',
+      context: { targetId: guild.id, critical: true },
+      revert: function () {
+        const p = [];
+        if (oldGuild.name !== newGuild.name) p.push(newGuild.setName(oldGuild.name, 'Zyron AI Security: revert name'));
+        if (oldGuild.iconURL() !== newGuild.iconURL()) p.push(newGuild.setIcon(oldGuild.iconURL(), 'Zyron AI Security: revert icon'));
+        return Promise.all(p);
+      }
+    });
+  } else {
+    runAiGuard(guild, settings, {
+      entry: entry,
+      action: 'Anti Guild Update',
+      reason: 'Server settings changed',
+      context: { targetId: guild.id }
+    });
   }
-
-  if (oldGuild.name !== newGuild.name) {
-    await newGuild.setName(oldGuild.name, 'Zyron Anti-Nuke: reverting guild name.').catch(function () {});
-  }
-  if (oldGuild.iconURL() !== newGuild.iconURL()) {
-    await newGuild.setIcon(oldGuild.iconURL(), 'Zyron Anti-Nuke: reverting guild icon.').catch(function () {});
-  }
-
-  await punish(guild, settings, entry.executor.id, 'Anti Guild Update', 'Changed server settings', 'severe');
 });
 
 client.on('guildIntegrationsUpdate', async function (guild) {
@@ -1362,17 +1247,12 @@ client.on('guildIntegrationsUpdate', async function (guild) {
   if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiIntegration', entry.executor.id)) return;
 
-  if (isTrusted(guild, settings, entry.executor.id, 'antiIntegration')) {
-    if (settings.features.antiBetrayal && !db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) {
-      const rogue = hit(guild.id, entry.executor.id, 'betray:integration', 15000, 1);
-      if (rogue) {
-        await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Integration)', 'Repeated integration changes by a trusted user');
-      }
-    }
-    return;
-  }
-
-  await punish(guild, settings, entry.executor.id, 'Anti Integration', 'Added, edited or removed an integration', 'severe');
+  runAiGuard(guild, settings, {
+    entry: entry,
+    action: 'Anti Integration',
+    reason: 'Added, edited or removed an integration',
+    context: { targetId: guild.id }
+  });
 });
 
 client.on('guildMemberUpdate', async function (oldMember, newMember) {
@@ -1395,31 +1275,19 @@ client.on('guildMemberUpdate', async function (oldMember, newMember) {
   if (isProtectedUser(entry.executor.id)) return;
   if (db.isFeatureWhitelisted(guild.id, 'antiMemberUpdate', entry.executor.id)) return;
 
-  if (isTrusted(guild, settings, entry.executor.id, 'antiMemberUpdate')) {
-    if (settings.features.antiBetrayal && !db.isFeatureWhitelisted(guild.id, 'antiBetrayal', entry.executor.id)) {
-      const rogue = hit(guild.id, entry.executor.id, 'betray:memberUpdate', 15000, 1);
-      if (rogue) {
-        await newMember.roles.set(oldMember.roles.cache.map(function (role) {
-          return role.id;
-        }), 'Zyron Anti-Betrayal: reverting dangerous role grant.').catch(function () {});
-        await betray(guild, settings, entry.executor.id, 'Anti Betrayal (Member Update)', 'Mass granted dangerous roles');
-      }
-    }
-    return;
-  }
-
   await newMember.roles.set(oldMember.roles.cache.map(function (role) {
     return role.id;
-  }), 'Zyron Anti-Nuke: reverting dangerous role grant.').catch(function () {});
+  }), 'Zyron AI Security: reverting dangerous role grant').catch(function () {});
 
-  await punish(
-    guild,
-    settings,
-    entry.executor.id,
-    'Anti Member Update',
-    'Gave ' + newMember.user.tag + ' the dangerous role ' + addedRole.name,
-    'mass'
-  );
+  runAiGuard(guild, settings, {
+    entry: entry,
+    action: 'Anti Member Update',
+    reason: 'Gave ' + newMember.user.tag + ' the dangerous role ' + addedRole.name,
+    context: { targetId: newMember.id, roleId: addedRole.id, dangerous: true },
+    revert: function () {
+      return newMember.roles.set(oldMember.roles.cache.map(function (role) { return role.id; }), 'Zyron AI Security: revert role grant');
+    }
+  });
 });
 
 function raidKey(guildId, userId) {
