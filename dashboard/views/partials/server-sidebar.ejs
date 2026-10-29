@@ -1,6 +1,7 @@
 <%
   var tab = typeof activeTab !== 'undefined' ? activeTab : 'overview';
   var item = function (key) { return 'nav-item server-nav-link' + (tab === key ? ' active' : ''); };
+  var activityData = typeof activity !== 'undefined' && activity ? activity : null;
   var featureCount = settings && settings.features ? Object.keys(settings.features).filter(function (key) { return settings.features[key]; }).length : 0;
 %>
 <aside class="sidebar server-sidebar">
@@ -86,6 +87,28 @@
     <a class="<%= item('economy') %>" href="#economy" data-panel="economy">
       <span class="nav-icon"><%- include('icon', { name: 'coins', size: 18 }) %></span>
       <span>Economy</span>
+    </a>
+    <a class="<%= item('levels') %>" href="#levels" data-panel="levels">
+      <span class="nav-icon"><%- include('icon', { name: 'sparkles', size: 18 }) %></span>
+      <span>Levels &amp; XP</span>
+      <% if (settings.levelsEnabled) { %><span class="status-dot tiny"></span><% } %>
+    </a>
+    <a class="<%= item('shop') %>" href="#shop" data-panel="shop">
+      <span class="nav-icon"><%- include('icon', { name: 'coins', size: 18 }) %></span>
+      <span>Coin Shop</span>
+      <% if (settings.shopEnabled) { %><span class="status-dot tiny"></span><% } %>
+    </a>
+
+    <span class="nav-label">Operations</span>
+    <a class="<%= item('health') %>" href="#health" data-panel="health">
+      <span class="nav-icon"><%- include('icon', { name: 'activity', size: 18 }) %></span>
+      <span>Server Health</span>
+      <% if (settings.serverAuditEnabled) { %><span class="status-dot tiny"></span><% } %>
+    </a>
+    <a class="<%= item('integrations') %>" href="#integrations" data-panel="integrations">
+      <span class="nav-icon"><%- include('icon', { name: 'link', size: 18 }) %></span>
+      <span>Integrations</span>
+      <% if (activityData && activityData.integrations && activityData.integrations.length) { %><span class="nav-pill"><%= activityData.integrations.length %></span><% } %>
     </a>
 
     <span class="nav-label">Configure</span>

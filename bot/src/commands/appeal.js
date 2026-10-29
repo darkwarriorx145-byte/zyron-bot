@@ -12,6 +12,29 @@ const config = require('../../config.json');
 module.exports = {
   name: 'appeal',
   description: 'Private appeal flow for kicked or banned members.',
+  usage: 'Appeals are opened from the private DM sent after a punishment.',
+  subcommands: [
+    { name: 'info', description: 'Explain how the private appeal flow works.' }
+  ],
+  async execute(client, message) {
+    return message.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(config.colors.primary)
+          .setTitle('🧾 Appeal System')
+          .setDescription(
+            'Appeals are private and are opened from the DM Zyron sends after a punishment.\n\n' +
+            '**How it works**\n' +
+            '1. A moderator punishes a member.\n' +
+            '2. Zyron DMs the member a private appeal button.\n' +
+            '3. The member answers the private questions.\n' +
+            '4. Staff review the appeal from the dashboard or the appeal panel.\n\n' +
+            'Use the dashboard **Appeals** panel to review pending cases.'
+          )
+          .setFooter({ text: config.botName + ' | Powered by ' + config.company })
+      ]
+    });
+  },
   async handleInteraction(client, interaction) {
     const parts = interaction.customId.split(':');
     const action = parts[1];

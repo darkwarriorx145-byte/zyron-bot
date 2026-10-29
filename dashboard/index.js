@@ -356,6 +356,24 @@ function defaultGuild() {
     inviteLogChannel: null,
     nicknameLogChannel: null,
     bannedNickPatterns: [],
+    levelsEnabled: false,
+    xpPerMessage: 15,
+    xpMessageCooldown: 60,
+    xpPerVoiceMinute: 10,
+    coinsPerMessage: 2,
+    coinsPerVoiceMinute: 1,
+    coinsPerLevel: 50,
+    levelUpChannelId: null,
+    levelRewards: [],
+    levelUpMessage: null,
+    shopEnabled: false,
+    shopChannelId: null,
+    shopLogChannel: null,
+    serverAuditEnabled: false,
+    serverAuditIntervalHours: 24,
+    serverAuditChannelId: null,
+    serverAuditLastAt: null,
+    serverAuditReport: null,
     extraOwners: [],
     whitelist: [],
     featureWhitelist: {},
@@ -403,6 +421,8 @@ function normalizeGuild(guild) {
     merged.ticketPriorities = base.ticketPriorities.slice();
   }
   if (!Array.isArray(merged.bannedNickPatterns)) merged.bannedNickPatterns = [];
+  if (!Array.isArray(merged.levelRewards)) merged.levelRewards = [];
+  if (merged.serverAuditIntervalHours === undefined) merged.serverAuditIntervalHours = 24;
   return merged;
 }
 
@@ -585,7 +605,24 @@ function localActivity(guildId) {
     customCommands: Array.isArray(data.customCommands && data.customCommands[guildId]) ? data.customCommands[guildId] : [],
     reactionRoles: Array.isArray(data.reactionRoles && data.reactionRoles[guildId]) ? data.reactionRoles[guildId] : [],
     inviteLeaderboard: [],
-    maintenanceMode: false
+    maintenanceMode: false,
+    levelsLeaderboard: Object.keys(data.levels && data.levels[guildId] ? data.levels[guildId] : {}).map(function (userId) {
+      const record = data.levels[guildId][userId] || {};
+      return {
+        userId: userId,
+        totalXp: record.totalXp || 0,
+        level: record.level || 0,
+        messages: record.messages || 0,
+        voiceMinutes: record.voiceMinutes || 0,
+        coinsEarned: record.coinsEarned || 0
+      };
+    }).sort(function (a, b) { return b.totalXp - a.totalXp; }).slice(0, 10),
+    shopItems: Array.isArray(data.shops && data.shops[guildId]) ? data.shops[guildId] : [],
+    purchases: Array.isArray(data.purchases && data.purchases[guildId]) ? data.purchases[guildId].slice(-25).reverse() : [],
+    healthReport: data.guilds && data.guilds[guildId] ? (data.guilds[guildId].serverAuditReport || null) : null,
+    integrations: Array.isArray(data.integrations && data.integrations[guildId]) ? data.integrations[guildId] : [],
+    tempActions: Array.isArray(data.tempActions && data.tempActions[guildId]) ? data.tempActions[guildId] : [],
+    schedules: Array.isArray(data.schedules && data.schedules[guildId]) ? data.schedules[guildId] : []
   };
 }
 
@@ -1318,7 +1355,14 @@ app.get('/server/:id', requireAuth, async function (req, res, next) {
         customCommands: [],
         reactionRoles: [],
         inviteLeaderboard: [],
-        maintenanceMode: false
+        maintenanceMode: false,
+        levelsLeaderboard: [],
+        shopItems: [],
+        purchases: [],
+        healthReport: null,
+        integrations: [],
+        tempActions: [],
+        schedules: []
       },
       featureCatalog: FEATURE_CATALOG,
       featureGroups: FEATURE_GROUPS,
@@ -1489,7 +1533,11 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     'inviteLogChannel',
     'nicknameLogChannel',
     'maintenanceChannelId',
-    'maintenanceAnnouncementChannelId'
+    'maintenanceAnnouncementChannelId',
+    'levelUpChannelId',
+    'shopChannelId',
+    'shopLogChannel',
+    'serverAuditChannelId'
   ];
   extraIdFields.forEach(function (field) {
     if (body[field] === undefined) return;
@@ -1505,7 +1553,10 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     'dmTicketUpdates',
     'dmFeedback',
     'ticketRatingsEnabled',
-    'ticketPriorityEnabled'
+    'ticketPriorityEnabled',
+    'levelsEnabled',
+    'shopEnabled',
+    'serverAuditEnabled'
   ];
   booleanFields.forEach(function (field) {
     if (body[field] !== undefined) updates[field] = Boolean(body[field]);
@@ -1535,6 +1586,41 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
   }
   if (typeof body.maintenanceMessage === 'string') {
     updates.maintenanceMessage = cleanText(body.maintenanceMessage, 2000);
+  }
+
+  const growthNumbers = {
+    xpPerMessage: [0, 1000],
+    xpMessageCooldown: [0, 86400],
+    xpPerVoiceMinute: [0, 1000],
+    coinsPerMessage: [0, 100000],
+    coinsPerVoiceMinute: [0, 100000],
+    coinsPerLevel: [0, 100000],
+    serverAuditIntervalHours: [1, 720]
+  };
+  Object.keys(growthNumbers).forEach(function (field) {
+    if (body[field] === undefined) return;
+    const value = parseInt(body[field], 10);
+    if (isNaN(value)) return;
+    updates[field] = Math.max(growthNumbers[field][0], Math.min(growthNumbers[field][1], value));
+  });
+
+  if (Array.isArray(body.levelRewards)) {
+    updates.levelRewards = body.levelRewards.map(function (reward) {
+      const level = parseInt(reward && reward.level, 10);
+      const roleId = cleanId(reward && reward.roleId);
+      if (isNaN(level) || level < 1 || level > 500 || !roleId) return null;
+      return {
+        level: level,
+        roleId: roleId,
+        message: cleanText(reward.message, 300)
+      };
+    }).filter(Boolean).slice(0, 50).sort(function (a, b) { return a.level - b.level; });
+  }
+
+  if (body.levelUpMessage !== undefined) updates.levelUpMessage = cleanText(body.levelUpMessage, 500);
+
+  if (body.serverAuditEnabled === true && !existing.serverAuditEnabled) {
+    updates.serverAuditLastAt = Date.now();
   }
 
   if (body.features && typeof body.features === 'object') {
@@ -1625,6 +1711,29 @@ app.post('/api/server/:id/purge', requireAuth, async function (req, res) {
 app.post('/api/server/:id/nickname', requireAuth, async function (req, res) {
   await relayBotAction(req, res, function (serverId, body) {
     return botApi.setNickname(serverId, body);
+  });
+});
+
+app.post('/api/server/:id/shop', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    if (body.deleteId) return botApi.deleteShopItem(serverId, body.deleteId);
+    if (body.updateId) return botApi.updateShopItem(serverId, body.updateId, body.item || {});
+    return botApi.createShopItem(serverId, body.item || body);
+  });
+});
+
+app.post('/api/server/:id/health', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId) {
+    return botApi.runHealth(serverId);
+  });
+});
+
+app.post('/api/server/:id/integrations', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    if (body.deleteId) return botApi.deleteIntegration(serverId, body.deleteId);
+    if (body.testId) return botApi.testIntegration(serverId, body.testId);
+    if (body.updateId) return botApi.updateIntegration(serverId, body.updateId, body.integration || {});
+    return botApi.createIntegration(serverId, body.integration || body);
   });
 });
 

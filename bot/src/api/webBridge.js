@@ -14,6 +14,12 @@ const maintenance = require('../utils/maintenance');
 const enhancedInvites = require('../utils/inviteLogger');
 const nicknameUtil = require('../utils/nickname');
 const advancedPurge = require('../utils/advancedPurge');
+const levels = require('../utils/levels');
+const shop = require('../utils/shop');
+const tempActions = require('../utils/tempActions');
+const scheduler = require('../utils/scheduler');
+const serverAudit = require('../utils/serverAudit');
+const integrations = require('../utils/integrations');
 
 const API_KEY = process.env.BOT_API_KEY || process.env.ZYRON_API_KEY || '';
 const ENABLED = String(process.env.BOT_API_ENABLED || '').toLowerCase() === 'true' || Boolean(API_KEY);
@@ -189,6 +195,24 @@ function summarizeSettings(settings) {
     inviteLogChannel: settings.inviteLogChannel || null,
     nicknameLogChannel: settings.nicknameLogChannel || null,
     bannedNickPatterns: Array.isArray(settings.bannedNickPatterns) ? settings.bannedNickPatterns : [],
+    levelsEnabled: settings.levelsEnabled === true,
+    xpPerMessage: settings.xpPerMessage,
+    xpMessageCooldown: settings.xpMessageCooldown,
+    xpPerVoiceMinute: settings.xpPerVoiceMinute,
+    coinsPerMessage: settings.coinsPerMessage,
+    coinsPerVoiceMinute: settings.coinsPerVoiceMinute,
+    coinsPerLevel: settings.coinsPerLevel,
+    levelUpChannelId: settings.levelUpChannelId || null,
+    levelRewards: Array.isArray(settings.levelRewards) ? settings.levelRewards : [],
+    levelUpMessage: settings.levelUpMessage || null,
+    shopEnabled: settings.shopEnabled === true,
+    shopChannelId: settings.shopChannelId || null,
+    shopLogChannel: settings.shopLogChannel || null,
+    serverAuditEnabled: settings.serverAuditEnabled === true,
+    serverAuditIntervalHours: settings.serverAuditIntervalHours || 24,
+    serverAuditChannelId: settings.serverAuditChannelId || null,
+    serverAuditLastAt: settings.serverAuditLastAt || null,
+    serverAuditReport: settings.serverAuditReport || null,
     features: settings.features || {}
   };
 }
@@ -456,6 +480,61 @@ function sanitizeSettings(guildId, input) {
   }
   if (body.maintenanceMessage !== undefined) updates.maintenanceMessage = cleanText(body.maintenanceMessage, 2000);
 
+  const growthIdFields = [
+    'levelUpChannelId',
+    'shopChannelId',
+    'shopLogChannel',
+    'serverAuditChannelId'
+  ];
+  growthIdFields.forEach(function (field) {
+    if (body[field] === undefined) return;
+    const value = cleanId(body[field]);
+    if (value === undefined) return;
+    updates[field] = value;
+  });
+
+  const growthBooleans = ['levelsEnabled', 'shopEnabled', 'serverAuditEnabled'];
+  growthBooleans.forEach(function (field) {
+    if (body[field] !== undefined) updates[field] = Boolean(body[field]);
+  });
+
+  const growthNumbers = {
+    xpPerMessage: [0, 1000],
+    xpMessageCooldown: [0, 86400],
+    xpPerVoiceMinute: [0, 1000],
+    coinsPerMessage: [0, 100000],
+    coinsPerVoiceMinute: [0, 100000],
+    coinsPerLevel: [0, 100000],
+    serverAuditIntervalHours: [1, 720]
+  };
+  Object.keys(growthNumbers).forEach(function (field) {
+    if (body[field] === undefined) return;
+    const value = parseInt(body[field], 10);
+    if (isNaN(value)) return;
+    updates[field] = Math.max(growthNumbers[field][0], Math.min(growthNumbers[field][1], value));
+  });
+
+  if (Array.isArray(body.levelRewards)) {
+    updates.levelRewards = body.levelRewards.map(function (reward) {
+      const level = parseInt(reward && reward.level, 10);
+      const roleId = cleanId(reward && reward.roleId);
+      if (isNaN(level) || level < 1 || level > 500 || !roleId) return null;
+      return {
+        level: level,
+        roleId: roleId,
+        message: cleanText(reward.message, 300)
+      };
+    }).filter(Boolean).slice(0, 50).sort(function (a, b) {
+      return a.level - b.level;
+    });
+  }
+
+  if (body.levelUpMessage !== undefined) updates.levelUpMessage = cleanText(body.levelUpMessage, 500);
+
+  if (body.serverAuditEnabled === true && !current.serverAuditEnabled) {
+    updates.serverAuditLastAt = Date.now();
+  }
+
   if (body.features && typeof body.features === 'object') {
     const features = Object.assign({}, current.features || {});
     Object.keys(body.features).forEach(function (key) {
@@ -618,7 +697,28 @@ function activityPayload(guildId) {
     customCommands: commands,
     reactionRoles: rolePanels,
     inviteLeaderboard: enhancedInvites.getInviteLeaderboard(guildId, 'total', 10),
-    maintenanceMode: db.getGuild(guildId).maintenanceMode === true
+    maintenanceMode: db.getGuild(guildId).maintenanceMode === true,
+    levelsLeaderboard: levels.getLeaderboard(guildId, 10),
+    shopItems: shop.getItems(guildId),
+    purchases: (db.data.purchases[guildId] || []).slice(-25).reverse(),
+    healthReport: db.getGuild(guildId).serverAuditReport || null,
+    integrations: integrations.list(guildId).map(function (item) {
+      return {
+        id: item.id,
+        type: item.type,
+        label: item.label,
+        url: item.url,
+        notes: item.notes,
+        enabled: item.enabled,
+        status: item.status,
+        lastCheckedAt: item.lastCheckedAt,
+        lastError: item.lastError,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt
+      };
+    }),
+    tempActions: tempActions.listActions(guildId),
+    schedules: scheduler.listSchedules(guildId)
   };
 }
 
@@ -1151,6 +1251,212 @@ async function handle(req, res) {
       .map(function (r) { return { id: r.id, name: r.name, color: r.hexColor, position: r.position }; })
       .sort(function (a, b) { return b.position - a.position; });
     return json(res, 200, { ok: true, roles: roles });
+  }
+
+  const levelsMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/levels$/);
+  if (levelsMatch) {
+    const guildId = levelsMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET') {
+      return json(res, 200, {
+        ok: true,
+        settings: summarizeSettings(db.getGuild(guildId)),
+        leaderboard: levels.getLeaderboard(guildId, 10)
+      });
+    }
+
+    if (req.method === 'PATCH') {
+      let body = {};
+      try {
+        body = await readBody(req);
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+      const updates = sanitizeSettings(guildId, body);
+      const settings = db.updateGuild(guildId, updates);
+      return json(res, 200, { ok: true, settings: summarizeSettings(settings) });
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
+  }
+
+  const shopMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/shop(?:\/([A-Za-z0-9]+))?$/);
+  if (shopMatch) {
+    const guildId = shopMatch[1];
+    const itemId = shopMatch[2] || null;
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET' && !itemId) {
+      return json(res, 200, {
+        ok: true,
+        items: shop.getItems(guildId),
+        purchases: (db.data.purchases[guildId] || []).slice(-25).reverse(),
+        settings: summarizeSettings(db.getGuild(guildId))
+      });
+    }
+
+    let body = {};
+    if (req.method === 'POST' || req.method === 'PATCH') {
+      try {
+        body = await readBody(req);
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+    }
+
+    try {
+      if (req.method === 'POST' && !itemId) {
+        const item = shop.addItem(guildId, body.item || body);
+        return json(res, 200, { ok: true, item: item });
+      }
+      if (req.method === 'PATCH' && itemId) {
+        const item = shop.updateItem(guildId, itemId, body.item || body);
+        return json(res, 200, { ok: true, item: item });
+      }
+      if (req.method === 'DELETE' && itemId) {
+        const removed = shop.deleteItem(guildId, itemId);
+        if (!removed) return json(res, 404, { ok: false, error: 'Shop item not found.' });
+        return json(res, 200, { ok: true });
+      }
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
+  }
+
+  const healthMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/health(?:\/(run))?$/);
+  if (healthMatch) {
+    const guildId = healthMatch[1];
+    const runNow = healthMatch[2] === 'run' || req.method === 'POST';
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (!runNow && req.method === 'GET') {
+      const settings = db.getGuild(guildId);
+      return json(res, 200, {
+        ok: true,
+        report: settings.serverAuditReport || null,
+        settings: summarizeSettings(settings)
+      });
+    }
+
+    if (runNow) {
+      try {
+        const settings = db.getGuild(guildId);
+        const report = await serverAudit.runAndStore(guild, settings, true);
+        return json(res, 200, { ok: true, report: report });
+      } catch (err) {
+        return json(res, 500, { ok: false, error: err.message });
+      }
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
+  }
+
+  const integrationsTestMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/integrations\/([A-Za-z0-9]+)\/test$/);
+  if (integrationsTestMatch) {
+    const guildId = integrationsTestMatch[1];
+    const integrationId = integrationsTestMatch[2];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+
+    try {
+      const item = await integrations.test(guildId, integrationId);
+      return json(res, 200, { ok: true, integration: item });
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+  }
+
+  const integrationsMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/integrations(?:\/([A-Za-z0-9]+))?$/);
+  if (integrationsMatch) {
+    const guildId = integrationsMatch[1];
+    const integrationId = integrationsMatch[2] || null;
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET' && !integrationId) {
+      const items = integrations.list(guildId).map(function (item) {
+        return {
+          id: item.id,
+          type: item.type,
+          label: item.label,
+          url: item.url,
+          notes: item.notes,
+          enabled: item.enabled,
+          status: item.status,
+          lastCheckedAt: item.lastCheckedAt,
+          lastError: item.lastError,
+          hasApiKey: Boolean(item.apiKey),
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt
+        };
+      });
+      return json(res, 200, {
+        ok: true,
+        integrations: items,
+        types: integrations.INTEGRATION_TYPES
+      });
+    }
+
+    let body = {};
+    if (req.method === 'POST' || req.method === 'PATCH') {
+      try {
+        body = await readBody(req);
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+    }
+
+    try {
+      if (req.method === 'POST' && !integrationId) {
+        const item = integrations.add(guildId, body.integration || body);
+        return json(res, 200, { ok: true, integration: item });
+      }
+      if (req.method === 'PATCH' && integrationId) {
+        const item = integrations.update(guildId, integrationId, body.integration || body);
+        return json(res, 200, { ok: true, integration: item });
+      }
+      if (req.method === 'DELETE' && integrationId) {
+        const removed = integrations.remove(guildId, integrationId);
+        if (!removed) return json(res, 404, { ok: false, error: 'Integration not found.' });
+        return json(res, 200, { ok: true });
+      }
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
+  }
+
+  const tempActionsMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/temp-actions$/);
+  if (tempActionsMatch) {
+    const guildId = tempActionsMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    return json(res, 200, { ok: true, actions: tempActions.listActions(guildId) });
+  }
+
+  const schedulesMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/schedules$/);
+  if (schedulesMatch) {
+    const guildId = schedulesMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    return json(res, 200, { ok: true, schedules: scheduler.listSchedules(guildId) });
   }
 
   const match = pathname.match(/^\/api\/guilds\/(\d{5,25})\/settings$/);

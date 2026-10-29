@@ -18,7 +18,7 @@ const CATEGORIES = [
     emoji: ZyronEmbedBuilder.emoji('shield'),
     description: 'Ban, kick, warn, timeout and warning tools.',
     blurb: 'Keep your server safe with complete member management.',
-    commands: ['ban', 'unban', 'kick', 'warn', 'warnings', 'clearwarnings', 'timeout', 'untimeout']
+    commands: ['ban', 'unban', 'kick', 'warn', 'warnings', 'clearwarnings', 'timeout', 'untimeout', 'tempban']
   },
   {
     value: 'antinuke',
@@ -81,6 +81,14 @@ const CATEGORIES = [
     commands: ['economy']
   },
   {
+    value: 'growth',
+    label: 'Levels & Shop',
+    emoji: ZyronEmbedBuilder.emoji('party'),
+    description: 'XP, levels, activity coins and the admin-run coin shop.',
+    blurb: 'Reward active members with levels, roles and coins.',
+    commands: ['levels', 'shop', 'schedule']
+  },
+  {
     value: 'community',
     label: 'Community',
     emoji: ZyronEmbedBuilder.emoji('party'),
@@ -92,9 +100,9 @@ const CATEGORIES = [
     value: 'utility',
     label: 'Utility',
     emoji: ZyronEmbedBuilder.emoji('settings'),
-    description: 'Purge, lock, unlock, autorole, nickname and maintenance mode.',
+    description: 'Purge, lock, unlock, autorole, nickname, maintenance, audits and integrations.',
     blurb: 'Everyday tools to keep channels clean and roles automatic.',
-    commands: ['purge', 'lock', 'unlock', 'autorole', 'nickname', 'invites', 'maintenance', 'profile']
+    commands: ['purge', 'lock', 'unlock', 'autorole', 'nickname', 'invites', 'maintenance', 'servercheck', 'integrations', 'profile']
   },
   {
     value: 'information',

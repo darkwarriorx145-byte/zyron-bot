@@ -1379,6 +1379,402 @@
         </div>
       </section>
 
+      <section class="panel" data-panel="levels" id="panel-levels">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Community</span>
+            <h2>Levels &amp; XP</h2>
+            <p class="muted">Reward activity from messages and voice time. The admin chooses rates, role rewards and the announcement channel.</p>
+          </div>
+          <span class="badge <%= settings.levelsEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.levelsEnabled ? 'Enabled' : 'Disabled' %></span>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'sparkles', size: 18 }) %></span>
+                <div>
+                  <h3>Activity rates</h3>
+                  <p class="muted">XP and coins members earn from messages and voice activity.</p>
+                </div>
+              </div>
+            </div>
+            <div class="panel-grid two">
+              <label class="field">
+                <span>XP per message</span>
+                <input class="input" id="xpPerMessage" type="number" min="0" max="1000" value="<%= settings.xpPerMessage %>">
+              </label>
+              <label class="field">
+                <span>Message cooldown (seconds)</span>
+                <input class="input" id="xpMessageCooldown" type="number" min="0" max="86400" value="<%= settings.xpMessageCooldown %>">
+              </label>
+              <label class="field">
+                <span>XP per voice minute</span>
+                <input class="input" id="xpPerVoiceMinute" type="number" min="0" max="1000" value="<%= settings.xpPerVoiceMinute %>">
+              </label>
+              <label class="field">
+                <span>Coins per message</span>
+                <input class="input" id="coinsPerMessage" type="number" min="0" max="100000" value="<%= settings.coinsPerMessage %>">
+              </label>
+              <label class="field">
+                <span>Coins per voice minute</span>
+                <input class="input" id="coinsPerVoiceMinute" type="number" min="0" max="100000" value="<%= settings.coinsPerVoiceMinute %>">
+              </label>
+              <label class="field">
+                <span>Coins per level</span>
+                <input class="input" id="coinsPerLevel" type="number" min="0" max="100000" value="<%= settings.coinsPerLevel %>">
+              </label>
+            </div>
+            <label class="field">
+              <span>Level-up announcement channel</span>
+              <select class="input" data-channel-picker id="levelUpChannelId" data-selected="<%= settings.levelUpChannelId || '' %>"></select>
+            </label>
+            <label class="field">
+              <span>Custom level-up message</span>
+              <input class="input" id="levelUpMessage" type="text" maxlength="500" value="<%= settings.levelUpMessage || '' %>" placeholder="**{user}** just reached **Level {level}** in **{server}**!">
+              <small class="field-hint">Placeholders: {user}, {username}, {level}, {server}. Leave blank for the default.</small>
+            </label>
+            <label class="field">
+              <span class="checkbox-row"><input type="checkbox" id="levelsEnabled" <%= settings.levelsEnabled ? 'checked' : '' %>> Levels and activity rewards enabled</span>
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-mod-action="levels-save">Save level settings</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'gift', size: 18 }) %></span>
+                <div>
+                  <h3>Role rewards</h3>
+                  <p class="muted">Give a role automatically when a member reaches a level.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list" id="levelRewardsList">
+              <% (settings.levelRewards || []).forEach(function (reward, index) { %>
+                <div class="reward-row" data-reward-row>
+                  <input class="input reward-level" type="number" min="1" max="500" value="<%= reward.level %>" aria-label="Level">
+                  <select class="input reward-role" data-role-picker data-selected="<%= reward.roleId %>" aria-label="Role"></select>
+                  <button type="button" class="btn btn-ghost btn-sm" data-remove-reward>Remove</button>
+                </div>
+              <% }); %>
+            </div>
+            <div class="row-actions">
+              <button type="button" class="btn btn-ghost btn-sm" data-mod-action="level-reward-add">+ Add level reward</button>
+            </div>
+            <div class="card-head" style="margin-top:18px">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'activity', size: 18 }) %></span>
+                <div>
+                  <h3>Top levels</h3>
+                  <p class="muted">Live leaderboard from the bot database.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list" id="levelsLeaderboard">
+              <% var levelRows = (activity && activity.levelsLeaderboard) || []; %>
+              <% if (levelRows.length === 0) { %>
+                <div class="empty-inline">No XP recorded yet.</div>
+              <% } else { %>
+                <% levelRows.forEach(function (entry, index) { %>
+                  <div class="data-row"><span><strong>#<%= index + 1 %> <span class="muted">ID</span> <%= entry.userId %></strong><small>Level <%= entry.level %> &middot; <%= entry.totalXp %> XP &middot; <%= entry.messages %> messages</small></span></div>
+                <% }); %>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="shop" id="panel-shop">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Community</span>
+            <h2>Coin Shop</h2>
+            <p class="muted">The admin decides every item, price, stock and role. Members buy with Zyron Coins.</p>
+          </div>
+          <span class="badge <%= settings.shopEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.shopEnabled ? 'Open' : 'Closed' %></span>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'coins', size: 18 }) %></span>
+              <div>
+                <h3>Shop settings</h3>
+                <p class="muted">Turn the shop on and choose where purchases are logged.</p>
+              </div>
+            </div>
+          </div>
+          <div class="panel-grid two">
+            <label class="field">
+              <span>Purchase log channel</span>
+              <select class="input" data-channel-picker id="shopLogChannel" data-selected="<%= settings.shopLogChannel || '' %>"></select>
+            </label>
+            <label class="field">
+              <span>Shop display channel (optional)</span>
+              <select class="input" data-channel-picker id="shopChannelId" data-selected="<%= settings.shopChannelId || '' %>"></select>
+            </label>
+          </div>
+          <label class="field">
+            <span class="checkbox-row"><input type="checkbox" id="shopEnabled" <%= settings.shopEnabled ? 'checked' : '' %>> Coin shop enabled</span>
+          </label>
+          <div class="row-actions">
+            <button type="button" class="btn btn-primary btn-sm" data-mod-action="shop-settings-save">Save shop settings</button>
+          </div>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'plus', size: 18 }) %></span>
+                <div>
+                  <h3 id="shopFormTitle">Add shop item</h3>
+                  <p class="muted">Set a name, price, role and optional stock limit.</p>
+                </div>
+              </div>
+            </div>
+            <input type="hidden" id="shopEditing" value="">
+            <div class="panel-grid two">
+              <label class="field">
+                <span>Item name</span>
+                <input class="input" id="shopName" type="text" maxlength="80" placeholder="VIP role">
+              </label>
+              <label class="field">
+                <span>Emoji</span>
+                <input class="input" id="shopEmoji" type="text" maxlength="8" value="🎁">
+              </label>
+              <label class="field">
+                <span>Price (coins)</span>
+                <input class="input" id="shopPrice" type="number" min="1" max="100000000" value="100">
+              </label>
+              <label class="field">
+                <span>Role reward</span>
+                <select class="input" data-role-picker id="shopRole" data-selected=""></select>
+              </label>
+              <label class="field">
+                <span>Stock (-1 = unlimited)</span>
+                <input class="input" id="shopStock" type="number" min="-1" max="1000000" value="-1">
+              </label>
+              <label class="field">
+                <span>Max per member (0 = unlimited)</span>
+                <input class="input" id="shopMaxPerUser" type="number" min="0" max="100" value="0">
+              </label>
+            </div>
+            <label class="field">
+              <span>Description</span>
+              <textarea class="input" id="shopDescription" rows="2" maxlength="500" placeholder="What this item unlocks."></textarea>
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-mod-action="shop-save">Save item</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-mod-action="shop-reset">New item</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'layers', size: 18 }) %></span>
+                <div>
+                  <h3>Shop items</h3>
+                  <p class="muted"><%= (activity && activity.shopItems ? activity.shopItems.length : 0) %> item(s) configured.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list" id="shopItemsList">
+              <% var shopRows = (activity && activity.shopItems) || []; %>
+              <% if (shopRows.length === 0) { %>
+                <div class="empty-inline">No shop items yet.</div>
+              <% } else { %>
+                <% shopRows.forEach(function (item) { %>
+                  <div class="data-row">
+                    <span><strong><%= item.emoji %> <%= item.name %></strong><small><%= item.price %> coins &middot; stock <%= item.stock === -1 ? 'unlimited' : item.stock %> &middot; <code><%= item.id %></code></small></span>
+                    <span class="row-actions">
+                      <button type="button" class="btn btn-ghost btn-sm" data-shop-edit="<%= item.id %>">Edit</button>
+                      <button type="button" class="btn btn-ghost btn-sm" data-shop-delete="<%= item.id %>">Delete</button>
+                    </span>
+                  </div>
+                <% }); %>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="health" id="panel-health">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Operations</span>
+            <h2>Server Health</h2>
+            <p class="muted">Automatic audits for dangerous roles, channel overwrites, bots, webhooks and server settings.</p>
+          </div>
+          <span class="badge <%= settings.serverAuditEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.serverAuditEnabled ? 'Auto checks on' : 'Auto checks off' %></span>
+        </div>
+
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'clock', size: 18 }) %></span>
+                <div>
+                  <h3>Schedule</h3>
+                  <p class="muted">Choose how often Zyron checks the server.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Check every (hours)</span>
+              <input class="input" id="serverAuditIntervalHours" type="number" min="1" max="720" value="<%= settings.serverAuditIntervalHours %>">
+            </label>
+            <label class="field">
+              <span>Report channel</span>
+              <select class="input" data-channel-picker id="serverAuditChannelId" data-selected="<%= settings.serverAuditChannelId || '' %>"></select>
+            </label>
+            <label class="field">
+              <span class="checkbox-row"><input type="checkbox" id="serverAuditEnabled" <%= settings.serverAuditEnabled ? 'checked' : '' %>> Automatic server checks enabled</span>
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-mod-action="health-save">Save schedule</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-mod-action="health-run">Run check now</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'shield-check', size: 18 }) %></span>
+                <div>
+                  <h3>Latest report</h3>
+                  <p class="muted">Each feature is grouped into its own category.</p>
+                </div>
+              </div>
+            </div>
+            <div id="healthReport">
+              <% var health = (activity && activity.healthReport) || settings.serverAuditReport; %>
+              <% if (!health) { %>
+                <div class="empty-inline">No report yet. Run a check to score this server.</div>
+              <% } else { %>
+                <div class="health-score">
+                  <span class="health-score-value"><%= health.score %></span>
+                  <span><strong>Grade <%= health.grade %></strong><small>Last checked <span data-timestamp="<%= health.generatedAt %>"></span></small></span>
+                </div>
+                <div class="health-categories">
+                  <% (health.categories || []).forEach(function (category) { %>
+                    <details class="health-category" <%= category.severity === 'critical' ? 'open' : '' %>>
+                      <summary><span class="health-dot <%= category.severity %>"></span><strong><%= category.title %></strong><small><%= category.summary %></small></summary>
+                      <% (category.findings || []).slice(0, 8).forEach(function (item) { %>
+                        <div class="health-finding"><span class="health-dot <%= item.severity %>"></span><span><strong><%= item.label %></strong><small><%= item.detail %></small></span></div>
+                      <% }); %>
+                    </details>
+                  <% }); %>
+                </div>
+                <div class="health-recommendations">
+                  <strong>Recommendations</strong>
+                  <% (health.recommendations || []).forEach(function (item) { %><small>• <%= item %></small><% }); %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="integrations" id="panel-integrations">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Operations</span>
+            <h2>Integrations</h2>
+            <p class="muted">Link your Pterodactyl panel, Minecraft server and ten more service types to Zyron.</p>
+          </div>
+          <span class="badge badge-muted"><%= (activity && activity.integrations ? activity.integrations.length : 0) %> linked</span>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'link', size: 18 }) %></span>
+                <div>
+                  <h3 id="integrationFormTitle">Add integration</h3>
+                  <p class="muted">Pick a service type, paste the URL and test the connection.</p>
+                </div>
+              </div>
+            </div>
+            <input type="hidden" id="integrationEditing" value="">
+            <div class="panel-grid two">
+              <label class="field">
+                <span>Type</span>
+                <select class="input" id="integrationType">
+                  <option value="pterodactyl">🦖 Pterodactyl Panel</option>
+                  <option value="minecraft">⛏️ Minecraft Server</option>
+                  <option value="fivem">🚓 FiveM Server</option>
+                  <option value="uptime">📈 Uptime Monitor</option>
+                  <option value="github">🐙 GitHub</option>
+                  <option value="twitch">🟣 Twitch</option>
+                  <option value="youtube">▶️ YouTube</option>
+                  <option value="roblox">🧱 Roblox</option>
+                  <option value="steam">🎮 Steam</option>
+                  <option value="discord_webhook">🔗 Discord Webhook</option>
+                  <option value="custom_api">🧩 Custom API</option>
+                  <option value="custom_link">🌐 Custom Link</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Label</span>
+                <input class="input" id="integrationLabel" type="text" maxlength="80" placeholder="Main panel">
+              </label>
+            </div>
+            <label class="field">
+              <span>URL or address</span>
+              <input class="input" id="integrationUrl" type="text" maxlength="500" placeholder="https://panel.example.com">
+            </label>
+            <label class="field">
+              <span>API key (optional)</span>
+              <input class="input" id="integrationApiKey" type="password" maxlength="500" autocomplete="new-password" placeholder="Leave blank to keep the existing key">
+            </label>
+            <label class="field">
+              <span>Notes</span>
+              <textarea class="input" id="integrationNotes" rows="2" maxlength="500" placeholder="Optional notes for staff."></textarea>
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-mod-action="integration-save">Save integration</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-mod-action="integration-reset">New</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'server', size: 18 }) %></span>
+                <div>
+                  <h3>Linked services</h3>
+                  <p class="muted">Test or remove links at any time.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list" id="integrationsList">
+              <% var integrationRows = (activity && activity.integrations) || []; %>
+              <% if (integrationRows.length === 0) { %>
+                <div class="empty-inline">No services linked yet.</div>
+              <% } else { %>
+                <% integrationRows.forEach(function (item) { %>
+                  <div class="data-row">
+                    <span><strong><%= item.label %></strong><small><%= item.type %> &middot; <%= item.url %> &middot; <span class="integration-status <%= item.status %>"><%= item.status %></span></small></span>
+                    <span class="row-actions">
+                      <button type="button" class="btn btn-ghost btn-sm" data-integration-test="<%= item.id %>">Test</button>
+                      <button type="button" class="btn btn-ghost btn-sm" data-integration-edit="<%= item.id %>">Edit</button>
+                      <button type="button" class="btn btn-ghost btn-sm" data-integration-delete="<%= item.id %>">Delete</button>
+                    </span>
+                  </div>
+                <% }); %>
+              <% } %>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel" data-panel="settings" id="panel-settings">
         <div class="panel-head">
           <div>
@@ -2155,6 +2551,8 @@
       var activity = Z.activity || {};
       var toastEl = document.getElementById('toast');
       var customCommands = Array.isArray(activity.customCommands) ? activity.customCommands.slice() : [];
+      var shopItems = Array.isArray(activity.shopItems) ? activity.shopItems.slice() : [];
+      var integrationItems = Array.isArray(activity.integrations) ? activity.integrations.slice() : [];
 
       function byId(id) { return document.getElementById(id); }
       function val(id) { var el = byId(id); return el ? el.value : ''; }
@@ -2364,28 +2762,39 @@
         }
       }
 
+      var pickerData = null;
+
+      function fillPickers(channels, roles) {
+        document.querySelectorAll('[data-channel-picker]').forEach(function (select) {
+          var selected = select.getAttribute('data-selected') || select.value || '';
+          select.innerHTML = '<option value="">— None —</option>' + channels.map(function (channel) {
+            var label = (channel.type === 4 ? '📁 ' : (channel.type === 2 ? '🔊 ' : '# ')) + channel.name;
+            return '<option value="' + escapeHtml(channel.id) + '">' + escapeHtml(label) + '</option>';
+          }).join('');
+          if (selected) select.value = selected;
+          select.setAttribute('data-filled', '1');
+        });
+        document.querySelectorAll('[data-role-picker]').forEach(function (select) {
+          var selected = select.getAttribute('data-selected') || select.value || '';
+          select.innerHTML = '<option value="">— None —</option>' + roles.map(function (role) {
+            return '<option value="' + escapeHtml(role.id) + '">' + escapeHtml(role.name) + '</option>';
+          }).join('');
+          if (selected) select.value = selected;
+          select.setAttribute('data-filled', '1');
+        });
+      }
+
+      window.zyronRefreshPickers = function () {
+        if (pickerData) fillPickers(pickerData.channels || [], pickerData.roles || []);
+      };
+
       function populatePickers() {
         var channelPickers = document.querySelectorAll('[data-channel-picker]');
         var rolePickers = document.querySelectorAll('[data-role-picker]');
         if (channelPickers.length === 0 && rolePickers.length === 0) return;
         api('/picker', undefined, 'GET').then(function (data) {
-          var channels = data.channels || [];
-          var roles = data.roles || [];
-          channelPickers.forEach(function (select) {
-            var selected = select.getAttribute('data-selected') || select.value || '';
-            select.innerHTML = '<option value="">— None —</option>' + channels.map(function (channel) {
-              var label = (channel.type === 4 ? '📁 ' : (channel.type === 2 ? '🔊 ' : '# ')) + channel.name;
-              return '<option value="' + escapeHtml(channel.id) + '">' + escapeHtml(label) + '</option>';
-            }).join('');
-            if (selected) select.value = selected;
-          });
-          rolePickers.forEach(function (select) {
-            var selected = select.getAttribute('data-selected') || select.value || '';
-            select.innerHTML = '<option value="">— None —</option>' + roles.map(function (role) {
-              return '<option value="' + escapeHtml(role.id) + '">' + escapeHtml(role.name) + '</option>';
-            }).join('');
-            if (selected) select.value = selected;
-          });
+          pickerData = data;
+          fillPickers(data.channels || [], data.roles || []);
         }).catch(function (err) {
           toast('Could not load channels and roles: ' + err.message, 'error');
         });
@@ -2484,8 +2893,231 @@
             }).then(function () {
               toast('Notification settings saved.', 'success');
             }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'levels-save') {
+            api('/update', {
+              levelsEnabled: checked('levelsEnabled'),
+              xpPerMessage: Number(val('xpPerMessage')) || 0,
+              xpMessageCooldown: Number(val('xpMessageCooldown')) || 0,
+              xpPerVoiceMinute: Number(val('xpPerVoiceMinute')) || 0,
+              coinsPerMessage: Number(val('coinsPerMessage')) || 0,
+              coinsPerVoiceMinute: Number(val('coinsPerVoiceMinute')) || 0,
+              coinsPerLevel: Number(val('coinsPerLevel')) || 0,
+              levelUpChannelId: val('levelUpChannelId') || null,
+              levelUpMessage: val('levelUpMessage') || null,
+              levelRewards: collectRewards()
+            }).then(function () {
+              toast('Level settings saved.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 700);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'level-reward-add') {
+            addRewardRow(1, '');
+          } else if (action === 'shop-settings-save') {
+            api('/update', {
+              shopEnabled: checked('shopEnabled'),
+              shopLogChannel: val('shopLogChannel') || null,
+              shopChannelId: val('shopChannelId') || null
+            }).then(function () {
+              toast('Shop settings saved.', 'success');
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'shop-save') {
+            var shopName = val('shopName').trim();
+            var shopRole = val('shopRole');
+            var shopPrice = Number(val('shopPrice')) || 0;
+            if (!shopName) { toast('Enter an item name.', 'error'); return; }
+            if (!shopRole) { toast('Choose the role this item gives.', 'error'); return; }
+            if (shopPrice < 1) { toast('Price must be at least 1 coin.', 'error'); return; }
+            var item = {
+              name: shopName,
+              description: val('shopDescription'),
+              price: shopPrice,
+              roleId: shopRole,
+              emoji: val('shopEmoji') || '🎁',
+              stock: Number(val('shopStock')),
+              maxPerUser: Number(val('shopMaxPerUser')) || 0,
+              enabled: true
+            };
+            var editingShop = val('shopEditing');
+            api('/shop', editingShop ? { updateId: editingShop, item: item } : { item: item }).then(function () {
+              toast(editingShop ? 'Shop item updated.' : 'Shop item added.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 700);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'shop-reset') {
+            resetShopForm();
+          } else if (action === 'health-save') {
+            api('/update', {
+              serverAuditEnabled: checked('serverAuditEnabled'),
+              serverAuditIntervalHours: Number(val('serverAuditIntervalHours')) || 24,
+              serverAuditChannelId: val('serverAuditChannelId') || null
+            }).then(function () {
+              toast('Server health schedule saved.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 700);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'health-run') {
+            toast('Running a full server check…', '');
+            api('/health', {}).then(function () {
+              toast('Server check complete.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 900);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'integration-save') {
+            var integration = {
+              type: val('integrationType'),
+              label: val('integrationLabel').trim(),
+              url: val('integrationUrl').trim(),
+              apiKey: val('integrationApiKey').trim(),
+              notes: val('integrationNotes').trim()
+            };
+            if (!integration.url) { toast('Enter a URL or server address.', 'error'); return; }
+            var editingIntegration = val('integrationEditing');
+            api('/integrations', editingIntegration
+              ? { updateId: editingIntegration, integration: integration }
+              : { integration: integration }).then(function () {
+              toast(editingIntegration ? 'Integration updated.' : 'Integration linked.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 700);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'integration-reset') {
+            resetIntegrationForm();
           }
         });
+      });
+
+      function addRewardRow(level, roleId) {
+        var list = byId('levelRewardsList');
+        if (!list) return;
+        var row = document.createElement('div');
+        row.className = 'reward-row';
+        row.setAttribute('data-reward-row', '');
+        var levelInput = document.createElement('input');
+        levelInput.className = 'input reward-level';
+        levelInput.type = 'number';
+        levelInput.min = '1';
+        levelInput.max = '500';
+        levelInput.value = String(level || 1);
+        var roleSelect = document.createElement('select');
+        roleSelect.className = 'input reward-role';
+        roleSelect.setAttribute('data-role-picker', '');
+        if (roleId) roleSelect.setAttribute('data-selected', roleId);
+        var remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'btn btn-ghost btn-sm';
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', function () { row.remove(); });
+        row.appendChild(levelInput);
+        row.appendChild(roleSelect);
+        row.appendChild(remove);
+        list.appendChild(row);
+        if (window.zyronRefreshPickers) window.zyronRefreshPickers();
+      }
+
+      function collectRewards() {
+        var rows = document.querySelectorAll('[data-reward-row]');
+        var rewards = [];
+        rows.forEach(function (row) {
+          var level = parseInt(row.querySelector('.reward-level') ? row.querySelector('.reward-level').value : '', 10);
+          var role = row.querySelector('.reward-role') ? row.querySelector('.reward-role').value : '';
+          if (!isNaN(level) && level > 0 && role) rewards.push({ level: level, roleId: role });
+        });
+        return rewards.sort(function (a, b) { return a.level - b.level; });
+      }
+
+      function resetShopForm() {
+        byId('shopEditing').value = '';
+        byId('shopFormTitle').textContent = 'Add shop item';
+        byId('shopName').value = '';
+        byId('shopDescription').value = '';
+        byId('shopPrice').value = 100;
+        byId('shopRole').value = '';
+        byId('shopEmoji').value = '🎁';
+        byId('shopStock').value = -1;
+        byId('shopMaxPerUser').value = 0;
+      }
+
+      function editShopItem(id) {
+        var item = shopItems.filter(function (entry) { return entry.id === id; })[0];
+        if (!item) return;
+        byId('shopEditing').value = item.id;
+        byId('shopFormTitle').textContent = 'Edit — ' + item.name;
+        byId('shopName').value = item.name || '';
+        byId('shopDescription').value = item.description || '';
+        byId('shopPrice').value = item.price || 0;
+        byId('shopRole').value = item.roleId || '';
+        byId('shopEmoji').value = item.emoji || '🎁';
+        byId('shopStock').value = item.stock === undefined ? -1 : item.stock;
+        byId('shopMaxPerUser').value = item.maxPerUser || 0;
+        window.scrollTo({ top: byId('panel-shop').offsetTop - 20, behavior: 'smooth' });
+      }
+
+      function resetIntegrationForm() {
+        byId('integrationEditing').value = '';
+        byId('integrationFormTitle').textContent = 'Add integration';
+        byId('integrationType').value = 'pterodactyl';
+        byId('integrationLabel').value = '';
+        byId('integrationUrl').value = '';
+        byId('integrationApiKey').value = '';
+        byId('integrationNotes').value = '';
+      }
+
+      function editIntegration(id) {
+        var item = integrationItems.filter(function (entry) { return entry.id === id; })[0];
+        if (!item) return;
+        byId('integrationEditing').value = item.id;
+        byId('integrationFormTitle').textContent = 'Edit — ' + item.label;
+        byId('integrationType').value = item.type || 'custom_link';
+        byId('integrationLabel').value = item.label || '';
+        byId('integrationUrl').value = item.url || '';
+        byId('integrationApiKey').value = '';
+        byId('integrationNotes').value = item.notes || '';
+        window.scrollTo({ top: byId('panel-integrations').offsetTop - 20, behavior: 'smooth' });
+      }
+
+      document.querySelectorAll('[data-remove-reward]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var row = button.closest('[data-reward-row]');
+          if (row) row.remove();
+        });
+      });
+
+      document.querySelectorAll('[data-shop-edit]').forEach(function (button) {
+        button.addEventListener('click', function () { editShopItem(button.getAttribute('data-shop-edit')); });
+      });
+
+      document.querySelectorAll('[data-shop-delete]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          if (!window.confirm('Delete this shop item?')) return;
+          api('/shop', { deleteId: button.getAttribute('data-shop-delete') }).then(function () {
+            toast('Shop item deleted.', 'success');
+            window.setTimeout(function () { window.location.reload(); }, 700);
+          }).catch(function (err) { toast(err.message, 'error'); });
+        });
+      });
+
+      document.querySelectorAll('[data-integration-edit]').forEach(function (button) {
+        button.addEventListener('click', function () { editIntegration(button.getAttribute('data-integration-edit')); });
+      });
+
+      document.querySelectorAll('[data-integration-test]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          toast('Testing connection…', '');
+          api('/integrations', { testId: button.getAttribute('data-integration-test') }).then(function (data) {
+            var item = data.integration || {};
+            toast(item.status === 'online' ? 'Connection is online.' : ('Offline: ' + (item.lastError || 'no response')), item.status === 'online' ? 'success' : 'error');
+          }).catch(function (err) { toast(err.message, 'error'); });
+        });
+      });
+
+      document.querySelectorAll('[data-integration-delete]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          if (!window.confirm('Remove this integration?')) return;
+          api('/integrations', { deleteId: button.getAttribute('data-integration-delete') }).then(function () {
+            toast('Integration removed.', 'success');
+            window.setTimeout(function () { window.location.reload(); }, 700);
+          }).catch(function (err) { toast(err.message, 'error'); });
+        });
+      });
+
+      document.querySelectorAll('[data-timestamp]').forEach(function (element) {
+        var stamp = Number(element.getAttribute('data-timestamp'));
+        if (!stamp) return;
+        element.textContent = new Date(stamp).toLocaleString();
       });
 
       ['ccResponse', 'ccType', 'ccEmbedTitle', 'ccEmbedDescription', 'ccEmbedColor'].forEach(function (id) {

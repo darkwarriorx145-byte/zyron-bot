@@ -39,6 +39,10 @@ const transcript = require('./src/utils/transcript');
 const advancedPurge = require('./src/utils/advancedPurge');
 const nicknameUtil = require('./src/utils/nickname');
 const inviteLogger = require('./src/utils/inviteLogger');
+const levels = require('./src/utils/levels');
+const tempActions = require('./src/utils/tempActions');
+const scheduler = require('./src/utils/scheduler');
+const serverAudit = require('./src/utils/serverAudit');
 
 theme.install();
 
@@ -687,6 +691,11 @@ function onReady() {
   console.log('Loaded ' + client.commands.size + ' commands.');
   webBridge.start(client);
 
+  levels.startVoiceLoop(client);
+  tempActions.start(client);
+  scheduler.start(client);
+  serverAudit.start(client);
+
   client.guilds.cache.forEach(function (guild) {
     db.getGuild(guild.id);
     channelBackup.backupGuild(guild);
@@ -850,7 +859,14 @@ client.on('messageCreate', async function (message) {
     });
   }
 
-  if (!message.content.startsWith(prefix)) return;
+  if (!message.content.startsWith(prefix)) {
+    if (settings.levelsEnabled) {
+      levels.handleMessage(message, settings).catch(function (err) {
+        console.error('Level XP failed:', err.message);
+      });
+    }
+    return;
+  }
 
   const raw = message.content.slice(prefix.length).trim();
   if (!raw) return;

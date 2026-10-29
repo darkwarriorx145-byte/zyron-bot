@@ -169,6 +169,58 @@ async function setNickname(guildId, payload) {
   return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/nickname', payload || {});
 }
 
+async function getLevels(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/levels');
+}
+
+async function updateLevels(guildId, payload) {
+  return request('PATCH', '/api/guilds/' + encodeURIComponent(guildId) + '/levels', payload || {});
+}
+
+async function getShop(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/shop');
+}
+
+async function createShopItem(guildId, item) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/shop', { item: item || {} });
+}
+
+async function updateShopItem(guildId, itemId, item) {
+  return request('PATCH', '/api/guilds/' + encodeURIComponent(guildId) + '/shop/' + encodeURIComponent(itemId), { item: item || {} });
+}
+
+async function deleteShopItem(guildId, itemId) {
+  return request('DELETE', '/api/guilds/' + encodeURIComponent(guildId) + '/shop/' + encodeURIComponent(itemId));
+}
+
+async function getHealth(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/health');
+}
+
+async function runHealth(guildId) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/health/run', {});
+}
+
+async function getIntegrations(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/integrations');
+}
+
+async function createIntegration(guildId, integration) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/integrations', { integration: integration || {} });
+}
+
+async function updateIntegration(guildId, integrationId, integration) {
+  return request('PATCH', '/api/guilds/' + encodeURIComponent(guildId) + '/integrations/' + encodeURIComponent(integrationId), { integration: integration || {} });
+}
+
+async function deleteIntegration(guildId, integrationId) {
+  return request('DELETE', '/api/guilds/' + encodeURIComponent(guildId) + '/integrations/' + encodeURIComponent(integrationId));
+}
+
+async function testIntegration(guildId, integrationId) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/integrations/' + encodeURIComponent(integrationId) + '/test', {});
+}
+
 let lastHeartbeatAt = 0;
 
 async function heartbeat(payload, force) {
@@ -243,6 +295,19 @@ module.exports = {
   getMaintenance: getMaintenance,
   purge: purge,
   setNickname: setNickname,
+  getLevels: getLevels,
+  updateLevels: updateLevels,
+  getShop: getShop,
+  createShopItem: createShopItem,
+  updateShopItem: updateShopItem,
+  deleteShopItem: deleteShopItem,
+  getHealth: getHealth,
+  runHealth: runHealth,
+  getIntegrations: getIntegrations,
+  createIntegration: createIntegration,
+  updateIntegration: updateIntegration,
+  deleteIntegration: deleteIntegration,
+  testIntegration: testIntegration,
   heartbeat: heartbeat,
   test: test
 };

@@ -75,6 +75,24 @@ const DASHBOARD_KEYS = [
   'inviteLogChannel',
   'nicknameLogChannel',
   'bannedNickPatterns',
+  'levelsEnabled',
+  'xpPerMessage',
+  'xpMessageCooldown',
+  'xpPerVoiceMinute',
+  'coinsPerMessage',
+  'coinsPerVoiceMinute',
+  'coinsPerLevel',
+  'levelUpChannelId',
+  'levelRewards',
+  'levelUpMessage',
+  'shopEnabled',
+  'shopChannelId',
+  'shopLogChannel',
+  'serverAuditEnabled',
+  'serverAuditIntervalHours',
+  'serverAuditChannelId',
+  'serverAuditLastAt',
+  'serverAuditReport',
   'features'
 ];
 
@@ -129,7 +147,13 @@ class Database {
       ticketRatings: {},
       inviteUses: {},
       staffActions: {},
-      staffMetrics: {}
+      staffMetrics: {},
+      levels: {},
+      shops: {},
+      purchases: {},
+      tempActions: {},
+      schedules: {},
+      integrations: {}
     };
     this.messageBuffer = 0;
     this.lastSyncMtime = 0;
@@ -174,6 +198,12 @@ class Database {
         this.data.inviteUses = parsed.inviteUses || {};
         this.data.staffActions = parsed.staffActions || {};
         this.data.staffMetrics = parsed.staffMetrics || {};
+        this.data.levels = parsed.levels || {};
+        this.data.shops = parsed.shops || {};
+        this.data.purchases = parsed.purchases || {};
+        this.data.tempActions = parsed.tempActions || {};
+        this.data.schedules = parsed.schedules || {};
+        this.data.integrations = parsed.integrations || {};
       } catch (err) {
         console.error('Database load failed, starting fresh:', err.message);
       }
@@ -278,6 +308,24 @@ class Database {
         aiAction: 'auto',
         economyDaily: 100,
         economyInvite: 25,
+        levelsEnabled: false,
+        xpPerMessage: 15,
+        xpMessageCooldown: 60,
+        xpPerVoiceMinute: 10,
+        coinsPerMessage: 2,
+        coinsPerVoiceMinute: 1,
+        coinsPerLevel: 50,
+        levelUpChannelId: null,
+        levelRewards: [],
+        levelUpMessage: null,
+        shopEnabled: false,
+        shopChannelId: null,
+        shopLogChannel: null,
+        serverAuditEnabled: false,
+        serverAuditIntervalHours: 24,
+        serverAuditChannelId: null,
+        serverAuditLastAt: null,
+        serverAuditReport: null,
         features: defaults()
       };
       this.save();
@@ -352,6 +400,25 @@ class Database {
     if (guild.inviteLogChannel === undefined) guild.inviteLogChannel = null;
     if (guild.nicknameLogChannel === undefined) guild.nicknameLogChannel = null;
     if (!Array.isArray(guild.bannedNickPatterns)) guild.bannedNickPatterns = [];
+
+    if (guild.levelsEnabled === undefined) guild.levelsEnabled = false;
+    if (guild.xpPerMessage === undefined) guild.xpPerMessage = 15;
+    if (guild.xpMessageCooldown === undefined) guild.xpMessageCooldown = 60;
+    if (guild.xpPerVoiceMinute === undefined) guild.xpPerVoiceMinute = 10;
+    if (guild.coinsPerMessage === undefined) guild.coinsPerMessage = 2;
+    if (guild.coinsPerVoiceMinute === undefined) guild.coinsPerVoiceMinute = 1;
+    if (guild.coinsPerLevel === undefined) guild.coinsPerLevel = 50;
+    if (guild.levelUpChannelId === undefined) guild.levelUpChannelId = null;
+    if (!Array.isArray(guild.levelRewards)) guild.levelRewards = [];
+    if (guild.levelUpMessage === undefined) guild.levelUpMessage = null;
+    if (guild.shopEnabled === undefined) guild.shopEnabled = false;
+    if (guild.shopChannelId === undefined) guild.shopChannelId = null;
+    if (guild.shopLogChannel === undefined) guild.shopLogChannel = null;
+    if (guild.serverAuditEnabled === undefined) guild.serverAuditEnabled = false;
+    if (guild.serverAuditIntervalHours === undefined) guild.serverAuditIntervalHours = 24;
+    if (guild.serverAuditChannelId === undefined) guild.serverAuditChannelId = null;
+    if (guild.serverAuditLastAt === undefined) guild.serverAuditLastAt = null;
+    if (guild.serverAuditReport === undefined) guild.serverAuditReport = null;
 
     const base = defaults();
     for (const key in base) {
