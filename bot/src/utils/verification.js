@@ -52,6 +52,29 @@ async function handleVerificationAccept(interaction) {
   const roles = uniqueRoleIds.map(function (id) { return guild.roles.cache.get(id); }).filter(Boolean);
   if (roles.length === 0) return interaction.reply({ content: 'Verification role not found.', ephemeral: true });
 
+  const inGuild = interaction.inGuild ? interaction.inGuild() : Boolean(interaction.guildId);
+
+  const alreadyVerified = roles.every(function (role) {
+    return member.roles.cache.has(role.id);
+  });
+
+  if (alreadyVerified) {
+    try {
+      await inviteLogger.countVerifiedInvite(guild, member, settings);
+    } catch (err) {
+      console.error('Verified invite sync failed for ' + member.id + ':', err.message);
+    }
+
+    return interaction.reply({
+      embeds: [new EmbedBuilder()
+        .setColor(config.colors.primary)
+        .setTitle('✅ Already Verified')
+        .setDescription('You are already verified in **' + guild.name + '**.')
+        .setFooter({ text: config.botName + ' | Powered by ' + config.company })],
+      ephemeral: inGuild
+    }).catch(function () {});
+  }
+
   try {
     const editable = roles.filter(function (role) { return role.editable; }).map(function (role) { return role.id; });
     if (editable.length === 0) {
@@ -66,14 +89,20 @@ async function handleVerificationAccept(interaction) {
       console.error('Verified invite count failed for ' + member.id + ':', err.message);
     }
 
-    await interaction.update({
-      embeds: [new EmbedBuilder()
-        .setColor(config.colors.success)
-        .setTitle('✅ Verified')
-        .setDescription('You have been verified and can now access ' + guild.name + '.')
-        .setFooter({ text: config.botName + ' | Powered by ' + config.company })],
-      components: []
-    });
+    const successEmbed = new EmbedBuilder()
+      .setColor(config.colors.success)
+      .setTitle('✅ Verified')
+      .setDescription('You have been verified and can now access ' + guild.name + '.')
+      .setFooter({ text: config.botName + ' | Powered by ' + config.company })
+      .setTimestamp();
+
+    // Private confirmation only. The public verification panel is left untouched
+    // so the button stays available for other members.
+    await interaction.reply({ embeds: [successEmbed], ephemeral: inGuild }).catch(function () {});
+
+    if (inGuild) {
+      await member.send({ embeds: [successEmbed] }).catch(function () {});
+    }
 
     const logId = settings.verificationLogChannel || settings.logChannel;
     const logChannel = logId ? guild.channels.cache.get(logId) : null;
@@ -92,7 +121,10 @@ async function handleVerificationAccept(interaction) {
       }).catch(function () {});
     }
   } catch (err) {
-    await interaction.reply({ content: 'Failed to verify you. Contact staff.', ephemeral: true });
+    console.error('Verification failed for ' + member.id + ':', err.message);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: 'Failed to verify you. Contact staff.', ephemeral: true }).catch(function () {});
+    }
   }
 }
 
