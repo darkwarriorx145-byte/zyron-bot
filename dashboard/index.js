@@ -328,6 +328,34 @@ function defaultGuild() {
     staffApplyQuestions: DEFAULT_STAFF_QUESTIONS.map(function (question) {
       return Object.assign({}, question);
     }),
+    verificationEnabled: false,
+    verificationChannel: null,
+    verificationRole: null,
+    verificationRoles: [],
+    verificationRules: null,
+    verificationLogChannel: null,
+    verificationQuestions: [],
+    verificationMode: 'button',
+    maintenanceMode: false,
+    maintenanceMessage: 'The server is currently under maintenance. Please check back later.',
+    maintenanceChannelId: null,
+    maintenanceAnnouncementChannelId: null,
+    maintenanceAllowedRoles: [],
+    maintenanceStartedAt: null,
+    maintenanceStartedBy: null,
+    vouchLogChannel: null,
+    feedbackChannel: null,
+    dmWarnings: true,
+    dmSecurity: true,
+    dmTicketUpdates: true,
+    dmFeedback: true,
+    ticketRatingsEnabled: true,
+    ticketPriorityEnabled: false,
+    ticketPriorities: ['Low', 'Normal', 'High', 'Urgent'],
+    customCommandRole: null,
+    inviteLogChannel: null,
+    nicknameLogChannel: null,
+    bannedNickPatterns: [],
     extraOwners: [],
     whitelist: [],
     featureWhitelist: {},
@@ -367,6 +395,14 @@ function normalizeGuild(guild) {
   if (!merged.staffApplyButtonLabel) merged.staffApplyButtonLabel = base.staffApplyButtonLabel;
   if (!merged.staffApplyButtonEmoji) merged.staffApplyButtonEmoji = base.staffApplyButtonEmoji;
   if (!merged.staffApplyModalTitle) merged.staffApplyModalTitle = base.staffApplyModalTitle;
+  if (!Array.isArray(merged.verificationRoles)) merged.verificationRoles = [];
+  if (!Array.isArray(merged.verificationQuestions)) merged.verificationQuestions = [];
+  if (!merged.verificationMode) merged.verificationMode = 'button';
+  if (!Array.isArray(merged.maintenanceAllowedRoles)) merged.maintenanceAllowedRoles = [];
+  if (!Array.isArray(merged.ticketPriorities) || merged.ticketPriorities.length === 0) {
+    merged.ticketPriorities = base.ticketPriorities.slice();
+  }
+  if (!Array.isArray(merged.bannedNickPatterns)) merged.bannedNickPatterns = [];
   return merged;
 }
 
@@ -539,7 +575,17 @@ function localActivity(guildId) {
           ? 'they closed ' + row.count + ' tickets'
           : 'they have no recent ticket closes'
       };
-    })
+    }),
+    vouches: Array.isArray(data.vouches && data.vouches[guildId]) ? data.vouches[guildId] : [],
+    vouchStats: { total: 0, average: 0, leaderboard: [] },
+    ticketRatings: { total: 0, average: 0, recent: [], enabled: true, priorityEnabled: false },
+    staffMetrics: {},
+    staffLeaderboard: [],
+    staffAdviceExtended: [],
+    customCommands: Array.isArray(data.customCommands && data.customCommands[guildId]) ? data.customCommands[guildId] : [],
+    reactionRoles: Array.isArray(data.reactionRoles && data.reactionRoles[guildId]) ? data.reactionRoles[guildId] : [],
+    inviteLeaderboard: [],
+    maintenanceMode: false
   };
 }
 
@@ -1262,7 +1308,17 @@ app.get('/server/:id', requireAuth, async function (req, res, next) {
         ticketStats: { total: 0, open: 0, closed: 0, closedBy: [] },
         staffStats: { total: 0, pending: 0, accepted: 0, denied: 0, reviewedBy: [] },
         appealStats: { total: 0, pending: 0, approved: 0, denied: 0 },
-        staffAdvice: []
+        staffAdvice: [],
+        vouches: [],
+        vouchStats: { total: 0, average: 0, leaderboard: [] },
+        ticketRatings: { total: 0, average: 0, recent: [], enabled: true, priorityEnabled: false },
+        staffMetrics: {},
+        staffLeaderboard: [],
+        staffAdviceExtended: [],
+        customCommands: [],
+        reactionRoles: [],
+        inviteLeaderboard: [],
+        maintenanceMode: false
       },
       featureCatalog: FEATURE_CATALOG,
       featureGroups: FEATURE_GROUPS,
@@ -1351,6 +1407,7 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     'autoRoleBotId',
     'boosterRoleId',
     'ticketCategory',
+    'ticketLogChannel',
     'ticketStaffRole',
     'ticketPanelChannel',
     'applicationChannel',
@@ -1422,6 +1479,64 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     updates.staffApplyQuestions = sanitizeStaffQuestions(body.staffApplyQuestions);
   }
 
+  const extraIdFields = [
+    'verificationChannel',
+    'verificationRole',
+    'verificationLogChannel',
+    'vouchLogChannel',
+    'feedbackChannel',
+    'customCommandRole',
+    'inviteLogChannel',
+    'nicknameLogChannel',
+    'maintenanceChannelId',
+    'maintenanceAnnouncementChannelId'
+  ];
+  extraIdFields.forEach(function (field) {
+    if (body[field] === undefined) return;
+    const value = cleanId(body[field]);
+    if (value === undefined) return;
+    updates[field] = value;
+  });
+
+  const booleanFields = [
+    'verificationEnabled',
+    'dmWarnings',
+    'dmSecurity',
+    'dmTicketUpdates',
+    'dmFeedback',
+    'ticketRatingsEnabled',
+    'ticketPriorityEnabled'
+  ];
+  booleanFields.forEach(function (field) {
+    if (body[field] !== undefined) updates[field] = Boolean(body[field]);
+  });
+
+  if (typeof body.verificationRules === 'string' || body.verificationRules === null) {
+    updates.verificationRules = cleanText(body.verificationRules, 4000);
+  }
+  if (typeof body.verificationMode === 'string' && ['button', 'dm', 'channel'].indexOf(body.verificationMode) !== -1) {
+    updates.verificationMode = body.verificationMode;
+  }
+  if (Array.isArray(body.verificationRoles)) {
+    updates.verificationRoles = body.verificationRoles.map(function (id) { return cleanId(id); }).filter(Boolean).slice(0, 10);
+  }
+  if (Array.isArray(body.maintenanceAllowedRoles)) {
+    updates.maintenanceAllowedRoles = body.maintenanceAllowedRoles.map(function (id) { return cleanId(id); }).filter(Boolean).slice(0, 10);
+  }
+  if (Array.isArray(body.ticketPriorities)) {
+    updates.ticketPriorities = body.ticketPriorities.map(function (p) {
+      return String(p || '').trim().slice(0, 20);
+    }).filter(Boolean).slice(0, 8);
+  }
+  if (Array.isArray(body.bannedNickPatterns)) {
+    updates.bannedNickPatterns = body.bannedNickPatterns.map(function (p) {
+      return String(p || '').trim().slice(0, 120);
+    }).filter(Boolean).slice(0, 20);
+  }
+  if (typeof body.maintenanceMessage === 'string') {
+    updates.maintenanceMessage = cleanText(body.maintenanceMessage, 2000);
+  }
+
   if (body.features && typeof body.features === 'object') {
     const features = Object.assign({}, existing.features);
     Object.keys(body.features).forEach(function (key) {
@@ -1438,6 +1553,79 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
+});
+
+app.get('/api/server/:id/picker', requireAuth, async function (req, res) {
+  const serverId = String(req.params.id);
+  if (!canManageGuild(req.user, serverId)) {
+    return res.status(403).json({ ok: false, error: 'You cannot manage this server.' });
+  }
+  if (!REMOTE_MODE) {
+    return res.status(503).json({ ok: false, error: 'Start the bot API to load channels and roles.' });
+  }
+  try {
+    const channelsResult = await botApi.listChannels(serverId);
+    const rolesResult = await botApi.listRoles(serverId);
+    return res.json({ ok: true, channels: channelsResult.channels || [], roles: rolesResult.roles || [] });
+  } catch (err) {
+    return res.status(502).json({ ok: false, error: err.message });
+  }
+});
+
+async function relayBotAction(req, res, runner) {
+  const serverId = String(req.params.id);
+  if (!canManageGuild(req.user, serverId)) {
+    return res.status(403).json({ ok: false, error: 'You cannot manage this server.' });
+  }
+  if (!REMOTE_MODE) {
+    return res.status(503).json({ ok: false, error: 'Start the bot API to use this feature.' });
+  }
+  try {
+    const result = await runner(serverId, req.body || {});
+    return res.json(Object.assign({ ok: true }, result || {}));
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
+}
+
+app.post('/api/server/:id/custom-command', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    if (body.deleteId) return botApi.deleteCustomCommand(serverId, body.deleteId);
+    if (body.updateId) return botApi.updateCustomCommand(serverId, body.updateId, body.command || {});
+    return botApi.createCustomCommand(serverId, body.command || body);
+  });
+});
+
+app.post('/api/server/:id/reaction-role', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    if (body.deleteId) return botApi.deleteReactionRole(serverId, body.deleteId);
+    if (body.publishId) return botApi.publishReactionRole(serverId, body.publishId);
+    return botApi.createReactionRole(serverId, body);
+  });
+});
+
+app.post('/api/server/:id/verification', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    return botApi.setupVerification(serverId, body);
+  });
+});
+
+app.post('/api/server/:id/maintenance', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    return botApi.setMaintenance(serverId, body);
+  });
+});
+
+app.post('/api/server/:id/purge', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    return botApi.purge(serverId, body);
+  });
+});
+
+app.post('/api/server/:id/nickname', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    return botApi.setNickname(serverId, body);
+  });
 });
 
 app.post('/api/server/:id/appeal/:caseId', requireAuth, async function (req, res) {

@@ -78,6 +78,11 @@
       <span class="nav-icon"><%- include('icon', { name: 'gift', size: 18 }) %></span>
       <span>Giveaways</span>
     </a>
+    <a class="<%= item('modules') %>" href="#modules" data-panel="modules">
+      <span class="nav-icon"><%- include('icon', { name: 'sliders', size: 18 }) %></span>
+      <span>Modules</span>
+      <% if (settings.maintenanceMode) { %><span class="nav-pill">Maint</span><% } %>
+    </a>
     <a class="<%= item('economy') %>" href="#economy" data-panel="economy">
       <span class="nav-icon"><%- include('icon', { name: 'coins', size: 18 }) %></span>
       <span>Economy</span>

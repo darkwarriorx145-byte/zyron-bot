@@ -10,7 +10,10 @@ const {
   AuditLogEvent,
   ActionRowBuilder,
   ButtonBuilder,
-  ButtonStyle
+  ButtonStyle,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle
 } = require('discord.js');
 const fs = require('fs');
 const config = require('./config.json');
@@ -26,6 +29,16 @@ const appealUtil = require('./src/utils/appeal');
 const ticketAssistant = require('./src/utils/ticketAssistant');
 const aiSecurity = require('./src/utils/aiSecurityEngine');
 const staffTracker = require('./src/utils/staffTracker');
+const customCommands = require('./src/utils/customCommands');
+const reactionRoles = require('./src/utils/reactionRoles');
+const vouch = require('./src/utils/vouch');
+const notifications = require('./src/utils/notifications');
+const maintenance = require('./src/utils/maintenance');
+const verification = require('./src/utils/verification');
+const transcript = require('./src/utils/transcript');
+const advancedPurge = require('./src/utils/advancedPurge');
+const nicknameUtil = require('./src/utils/nickname');
+const inviteLogger = require('./src/utils/inviteLogger');
 
 theme.install();
 
@@ -465,18 +478,11 @@ async function punish(guild, settings, userId, action, reason, severity, options
         return null;
       });
       if (warningUser) {
-        warningUser.send({
-          embeds: [
-            ZyronEmbedBuilder.base({
-              title: 'Warning ' + strikeCount + '/' + threshold,
-              description:
-                'You received a warning in **' + guild.name + '**.\n' +
-                '**Reason:** ' + reason + '\n\n' +
-                (strikeCount + 1 >= threshold
-                  ? 'One more warning will result in a kick.'
-                  : 'Keep following the server rules to avoid a kick.')
-            })
-          ]
+        notifications.dmWarning(warningUser, {
+          reason: reason,
+          count: strikeCount,
+          threshold: threshold,
+          guild: guild
         }).catch(function () {});
       }
     }
@@ -758,6 +764,18 @@ client.on('messageCreate', async function (message) {
 
   const activeTicket = db.getTicketByChannel(message.guild.id, message.channel.id);
 
+  if (maintenance.isMaintenanceMode(message.guild.id) && !protectedAuthor) {
+    const allowedRoles = settings.maintenanceAllowedRoles || [];
+    const hasAllowedRole = message.member && message.member.roles.cache.some(function (role) {
+      return allowedRoles.indexOf(role.id) !== -1;
+    });
+    const canManage = message.member && message.member.permissions.has(PermissionsBitField.Flags.ManageGuild);
+    if (!hasAllowedRole && !canManage && !isCommandMessage) {
+      await message.delete().catch(function () {});
+      return;
+    }
+  }
+
   if (!isCommandMessage && !protectedAuthor && !activeTicket) {
     const aiDecision = await aiSecurity.evaluateMessage(message.guild, settings, message);
     if (aiDecision && aiDecision.action !== 'allow') {
@@ -844,7 +862,37 @@ client.on('messageCreate', async function (message) {
     return cmd.aliases && cmd.aliases.indexOf(commandName) !== -1;
   });
 
-  if (!command) return;
+  if (!command) {
+    if (commandName === 'vouch' || commandName === 'feedback') {
+      const target = message.mentions.users.first();
+      if (!target) {
+        return message.reply({
+          embeds: [ZyronEmbedBuilder.error('Vouch', 'Mention the user you want to vouch for. Example: `.' + commandName + ' @user`')]
+        }).catch(function () {});
+      }
+      return message.reply({
+        embeds: [ZyronEmbedBuilder.info('Vouch Started', 'Click the button below to open the vouch form for ' + target.username + '.')],
+        components: [new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId('vouch:open:' + target.id)
+            .setLabel('Open Vouch Form')
+            .setStyle(ButtonStyle.Primary)
+            .setEmoji('🤝')
+        )]
+      }).catch(function () {});
+    }
+
+    const custom = customCommands.getCustomCommand(message.guild.id, commandName);
+    if (!custom) return;
+    if (!customCommands.canUseCommand(message.member, custom)) {
+      return message.reply({
+        embeds: [ZyronEmbedBuilder.error('Custom Command', 'You do not have access to this command.')]
+      }).catch(function () {});
+    }
+    return customCommands.executeCustomCommand(message, custom).catch(function (err) {
+      console.error('Custom command error:', err.message);
+    });
+  }
 
   if (command.permissions && command.permissions.length > 0) {
     if (!message.member.permissions.has(command.permissions)) {
@@ -1518,7 +1566,22 @@ client.on('guildMemberAdd', async function (member) {
     return;
   }
 
-  if (settings.autoRoleId) {
+  if (settings.verificationEnabled) {
+    const verifyRole = settings.verificationRole ? guild.roles.cache.get(settings.verificationRole) : null;
+    const alreadyVerified = verifyRole && member.roles.cache.has(verifyRole.id);
+
+    if (!alreadyVerified) {
+      if (settings.verificationMode !== 'channel') {
+        notifications.dmVerification(
+          member,
+          settings.verificationRules || 'Please accept the server rules in the verification channel.',
+          guild
+        ).catch(function () {});
+      }
+    }
+  }
+
+  if (settings.autoRoleId && !settings.verificationEnabled) {
     const role = guild.roles.cache.get(settings.autoRoleId);
     if (role && role.editable) {
       member.roles.add(role, 'Zyron AutoRole: join role').catch(function () {});
@@ -1681,11 +1744,103 @@ client.on('interactionCreate', async function (interaction) {
   if (!interaction.isButton() && !interaction.isModalSubmit() && !interaction.isAnySelectMenu()) return;
 
   const commandName = interaction.customId.split(':')[0];
-  const command = client.commands.get(commandName);
-
-  if (!command || typeof command.handleInteraction !== 'function') return;
 
   try {
+    if (commandName === 'verify') {
+      const action = interaction.customId.split(':')[1];
+      if (action === 'accept') {
+        return await verification.handleVerificationAccept(interaction);
+      }
+      return;
+    }
+
+    if (commandName === 'rr') {
+      const action = interaction.customId.split(':')[1];
+      if (action === 'toggle') return await reactionRoles.handleReactionRoleToggle(interaction);
+      if (action === 'dropdown') return await reactionRoles.handleDropdownRole(interaction);
+      return;
+    }
+
+    if (commandName === 'vouch') {
+      const action = interaction.customId.split(':')[1];
+      if (action === 'open') {
+        const targetId = interaction.customId.split(':')[2];
+        const target = await interaction.guild.members.fetch(targetId).catch(function () { return null; });
+        if (!target) return interaction.reply({ content: 'User not found.', ephemeral: true });
+        return await vouch.openVouchModal(interaction, target.user);
+      }
+      if (action === 'submit') return await vouch.handleVouchSubmit(interaction);
+      return;
+    }
+
+    if (commandName === 'feedback') {
+      const action = interaction.customId.split(':')[1];
+      if (action === 'rate') {
+        const modal = new ModalBuilder()
+          .setCustomId('feedback:submit:' + interaction.customId.split(':')[2])
+          .setTitle('Rate Your Experience');
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('stars')
+              .setLabel('Rating (1-5 stars)')
+              .setStyle(TextInputStyle.Short)
+              .setPlaceholder('5')
+              .setMaxLength(1)
+              .setRequired(true)
+          ),
+          new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+              .setCustomId('comment')
+              .setLabel('Any comments? (optional)')
+              .setStyle(TextInputStyle.Paragraph)
+              .setMaxLength(500)
+              .setRequired(false)
+          )
+        );
+        return interaction.showModal(modal);
+      }
+      if (action === 'submit') {
+        const rating = parseInt(interaction.fields.getTextInputValue('stars') || '0', 10);
+        if (isNaN(rating) || rating < 1 || rating > 5) {
+          return interaction.reply({ content: 'Rating must be 1-5.', ephemeral: true });
+        }
+        const record = {
+          id: interaction.customId.split(':')[2],
+          userId: interaction.user.id,
+          stars: rating,
+          comment: (interaction.fields.getTextInputValue('comment') || '').slice(0, 500),
+          createdAt: Date.now()
+        };
+        if (!db.data.ticketRatings[interaction.guild.id]) db.data.ticketRatings[interaction.guild.id] = [];
+        db.data.ticketRatings[interaction.guild.id].push(record);
+        db.save();
+
+        const settings = db.getGuild(interaction.guild.id);
+        const logId = settings.feedbackChannel || settings.logChannel;
+        const logChannel = logId ? interaction.guild.channels.cache.get(logId) : null;
+        if (logChannel) {
+          logChannel.send({
+            embeds: [ZyronEmbedBuilder.base({
+              color: config.colors.primary,
+              title: '⭐ Feedback Received',
+              description: '**User:** ' + interaction.user.tag + ' (<@' + interaction.user.id + '>)\n' +
+                '**Rating:** ' + '⭐'.repeat(rating) + ' (' + rating + '/5)\n' +
+                '**Comments:** ' + (record.comment || 'None')
+            })]
+          }).catch(function () {});
+        }
+
+        return interaction.reply({
+          embeds: [ZyronEmbedBuilder.success('Thank You!', 'Your feedback has been recorded.')],
+          ephemeral: true
+        });
+      }
+      return;
+    }
+
+    const command = client.commands.get(commandName);
+    if (!command || typeof command.handleInteraction !== 'function') return;
     await command.handleInteraction(client, interaction);
   } catch (err) {
     console.error('Interaction error (' + interaction.customId + '):', err);

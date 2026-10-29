@@ -7,6 +7,7 @@ const {
 } = require('discord.js');
 const db = require('../database/db');
 const config = require('../../config.json');
+const staffTracker = require('./staffTracker');
 
 const P = PermissionsBitField.Flags;
 
@@ -199,6 +200,7 @@ async function reviewAppeal(guild, settings, caseId, action, reviewerId) {
     });
 
     await sendLog(guild, settings, updated, 'Appeal Approved', config.colors.success);
+    if (reviewerId) staffTracker.logStaffAction(guild.id, reviewerId, 'appeal_approve', { caseId: caseId, userId: appeal.userId });
     return updated;
   }
 
@@ -225,6 +227,7 @@ async function reviewAppeal(guild, settings, caseId, action, reviewerId) {
   });
 
   await sendLog(guild, settings, updated, 'Appeal Declined', config.colors.danger);
+  if (reviewerId) staffTracker.logStaffAction(guild.id, reviewerId, 'appeal_deny', { caseId: caseId, userId: appeal.userId });
   return updated;
 }
 

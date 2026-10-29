@@ -47,6 +47,34 @@ const DASHBOARD_KEYS = [
   'staffApplyAcceptMessage',
   'staffApplyDenyMessage',
   'staffApplyQuestions',
+  'verificationEnabled',
+  'verificationChannel',
+  'verificationRole',
+  'verificationRoles',
+  'verificationRules',
+  'verificationLogChannel',
+  'verificationQuestions',
+  'verificationMode',
+  'maintenanceMode',
+  'maintenanceMessage',
+  'maintenanceChannelId',
+  'maintenanceAnnouncementChannelId',
+  'maintenanceAllowedRoles',
+  'maintenanceStartedAt',
+  'maintenanceStartedBy',
+  'vouchLogChannel',
+  'feedbackChannel',
+  'dmWarnings',
+  'dmSecurity',
+  'dmTicketUpdates',
+  'dmFeedback',
+  'ticketRatingsEnabled',
+  'ticketPriorityEnabled',
+  'ticketPriorities',
+  'customCommandRole',
+  'inviteLogChannel',
+  'nicknameLogChannel',
+  'bannedNickPatterns',
   'features'
 ];
 
@@ -93,7 +121,15 @@ class Database {
       cooldowns: {},
       tickets: {},
       staffApplications: {},
-      appeals: {}
+      appeals: {},
+      customCommands: {},
+      reactionRoles: {},
+      vouches: {},
+      feedback: {},
+      ticketRatings: {},
+      inviteUses: {},
+      staffActions: {},
+      staffMetrics: {}
     };
     this.messageBuffer = 0;
     this.lastSyncMtime = 0;
@@ -130,6 +166,14 @@ class Database {
         this.data.tickets = parsed.tickets || {};
         this.data.staffApplications = parsed.staffApplications || {};
         this.data.appeals = parsed.appeals || {};
+        this.data.customCommands = parsed.customCommands || {};
+        this.data.reactionRoles = parsed.reactionRoles || {};
+        this.data.vouches = parsed.vouches || {};
+        this.data.feedback = parsed.feedback || {};
+        this.data.ticketRatings = parsed.ticketRatings || {};
+        this.data.inviteUses = parsed.inviteUses || {};
+        this.data.staffActions = parsed.staffActions || {};
+        this.data.staffMetrics = parsed.staffMetrics || {};
       } catch (err) {
         console.error('Database load failed, starting fresh:', err.message);
       }
@@ -278,6 +322,35 @@ class Database {
     if (!guild.staffApplyAcceptMessage) guild.staffApplyAcceptMessage = null;
     if (!guild.staffApplyDenyMessage) guild.staffApplyDenyMessage = null;
     if (!Array.isArray(guild.staffApplyQuestions)) guild.staffApplyQuestions = [];
+
+    if (guild.verificationEnabled === undefined) guild.verificationEnabled = false;
+    if (guild.verificationChannel === undefined) guild.verificationChannel = null;
+    if (guild.verificationRole === undefined) guild.verificationRole = null;
+    if (!Array.isArray(guild.verificationRoles)) guild.verificationRoles = [];
+    if (guild.verificationRules === undefined) guild.verificationRules = null;
+    if (guild.verificationLogChannel === undefined) guild.verificationLogChannel = null;
+    if (!Array.isArray(guild.verificationQuestions)) guild.verificationQuestions = [];
+    if (!guild.verificationMode) guild.verificationMode = 'button';
+    if (guild.maintenanceMode === undefined) guild.maintenanceMode = false;
+    if (guild.maintenanceMessage === undefined) guild.maintenanceMessage = 'The server is currently under maintenance. Please check back later.';
+    if (guild.maintenanceChannelId === undefined) guild.maintenanceChannelId = null;
+    if (guild.maintenanceAnnouncementChannelId === undefined) guild.maintenanceAnnouncementChannelId = null;
+    if (!Array.isArray(guild.maintenanceAllowedRoles)) guild.maintenanceAllowedRoles = [];
+    if (guild.maintenanceStartedAt === undefined) guild.maintenanceStartedAt = null;
+    if (guild.maintenanceStartedBy === undefined) guild.maintenanceStartedBy = null;
+    if (guild.vouchLogChannel === undefined) guild.vouchLogChannel = null;
+    if (guild.feedbackChannel === undefined) guild.feedbackChannel = null;
+    if (guild.dmWarnings === undefined) guild.dmWarnings = true;
+    if (guild.dmSecurity === undefined) guild.dmSecurity = true;
+    if (guild.dmTicketUpdates === undefined) guild.dmTicketUpdates = true;
+    if (guild.dmFeedback === undefined) guild.dmFeedback = true;
+    if (guild.ticketRatingsEnabled === undefined) guild.ticketRatingsEnabled = true;
+    if (guild.ticketPriorityEnabled === undefined) guild.ticketPriorityEnabled = false;
+    if (!Array.isArray(guild.ticketPriorities)) guild.ticketPriorities = ['Low', 'Normal', 'High', 'Urgent'];
+    if (guild.customCommandRole === undefined) guild.customCommandRole = null;
+    if (guild.inviteLogChannel === undefined) guild.inviteLogChannel = null;
+    if (guild.nicknameLogChannel === undefined) guild.nicknameLogChannel = null;
+    if (!Array.isArray(guild.bannedNickPatterns)) guild.bannedNickPatterns = [];
 
     const base = defaults();
     for (const key in base) {

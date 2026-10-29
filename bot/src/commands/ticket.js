@@ -12,8 +12,56 @@ const {
 const db = require('../database/db');
 const config = require('../../config.json');
 const ticketAssistant = require('../utils/ticketAssistant');
+const transcript = require('../utils/transcript');
+const notifications = require('../utils/notifications');
+const staffTracker = require('../utils/staffTracker');
 
 const P = PermissionsBitField.Flags;
+
+async function finalizeTicketClose(guild, channel, settings, record, closedById, closedByTag, reason) {
+  const ticketData = {
+    id: record ? record.id : channel.id,
+    number: record ? record.number : 'unknown',
+    userId: record ? record.userId : null,
+    type: record ? record.type : 'General Support',
+    reason: record ? record.reason : '',
+    status: 'closed',
+    createdAt: record ? record.createdAt : Date.now(),
+    closedAt: Date.now(),
+    closedBy: closedById,
+    closeReason: reason
+  };
+
+  let transcriptResult = null;
+  try {
+    transcriptResult = await transcript.sendTranscript(ticketData, channel, guild);
+  } catch (err) {
+    console.error('Transcript generation failed:', err.message);
+  }
+
+  if (transcriptResult) {
+    await transcript.uploadTranscriptToLog(guild, settings, ticketData, transcriptResult).catch(function () {});
+  }
+
+  if (ticketData.userId) {
+    const user = await guild.client.users.fetch(ticketData.userId).catch(function () { return null; });
+    if (user) {
+      if (transcriptResult) {
+        await transcript.dmTranscriptToUser(ticketData.userId, guild, ticketData, transcriptResult).catch(function () {});
+      }
+      await notifications.dmTicketClose(user, ticketData, guild, closedByTag).catch(function () {});
+    }
+  }
+
+  if (closedById) {
+    staffTracker.logStaffAction(guild.id, closedById, 'ticket_close', {
+      ticket: ticketData.number,
+      owner: ticketData.userId
+    });
+  }
+
+  return transcriptResult;
+}
 
 function pad(value) {
   let text = String(value);
@@ -318,8 +366,14 @@ async function createTicket(client, interaction, custom, reason) {
     userId: interaction.user.id,
     type: type,
     reason: requestReason,
+    priority: 'Normal',
     status: 'open'
   });
+
+  const createdRecord = db.getTicketByChannel(guild.id, channel.id);
+  if (interaction.member) {
+    notifications.dmTicketOpen(interaction.member, createdRecord || { number: counter, type: type, reason: requestReason }, channel, guild).catch(function () {});
+  }
 
   const staffMentions = ticketAssistant.roleIds(settings).map(function (roleId) {
     return '<@&' + roleId + '>';
@@ -610,6 +664,18 @@ module.exports = {
         });
       }
 
+      await finalizeTicketClose(
+        message.guild,
+        message.channel,
+        settings,
+        record,
+        message.author.id,
+        message.author.tag,
+        reason
+      ).catch(function (err) {
+        console.error('Ticket close finalize error:', err.message);
+      });
+
       await message.channel.send({
         embeds: [
           new EmbedBuilder()
@@ -645,6 +711,34 @@ module.exports = {
       return;
     }
 
+    if (sub === 'priority') {
+      if (!staff) {
+        return message.reply({ embeds: [new EmbedBuilder().setColor(config.colors.danger).setTitle('❌ Permission Denied').setDescription('Only staff can change ticket priority.')] });
+      }
+
+      const level = args.slice(1).join(' ').trim();
+      const allowed = settings.ticketPriorities && settings.ticketPriorities.length
+        ? settings.ticketPriorities
+        : ['Low', 'Normal', 'High', 'Urgent'];
+      if (!level) {
+        return message.reply({ embeds: [new EmbedBuilder().setColor(config.colors.warning).setTitle('⚠️ Missing Priority').setDescription('Usage: **' + prefix + 'ticket priority High**\nAvailable: ' + allowed.join(', '))] });
+      }
+
+      const matched = allowed.find(function (item) { return item.toLowerCase() === level.toLowerCase(); });
+      if (!matched) {
+        return message.reply({ embeds: [new EmbedBuilder().setColor(config.colors.warning).setTitle('⚠️ Unknown Priority').setDescription('Available: ' + allowed.join(', '))] });
+      }
+
+      const record = db.getTicketByChannel(message.guild.id, message.channel.id);
+      if (record) db.updateTicket(message.guild.id, record.id, { priority: matched });
+
+      await message.channel.setTopic('Ticket ' + (info.id || '#unknown') + ' | owner:' + (info.owner || 'unknown') + ' | claimed:' + (info.claimed || 'none') + ' | type:' + (info.type || 'General Support') + ' | priority:' + matched).catch(function () {});
+
+      return message.channel.send({
+        embeds: [new EmbedBuilder().setColor(config.colors.primary).setTitle('🎚️ Ticket Priority Updated').setDescription('Priority set to **' + matched + '** by ' + message.author + '.')]
+      });
+    }
+
     if (sub === 'claim') {
       if (!staff) {
         return message.reply({ embeds: [new EmbedBuilder().setColor(config.colors.danger).setTitle('❌ Permission Denied').setDescription('Only staff can claim tickets.')] });
@@ -657,7 +751,10 @@ module.exports = {
       await message.channel.setTopic('Ticket ' + (info.id || '#unknown') + ' | owner:' + (info.owner || 'unknown') + ' | claimed:' + message.author.id + ' | type:' + (info.type || 'General Support')).catch(function () {});
 
       const record = db.getTicketByChannel(message.guild.id, message.channel.id);
-      if (record) db.updateTicket(message.guild.id, record.id, { claimedBy: message.author.id });
+      if (record) {
+        db.updateTicket(message.guild.id, record.id, { claimedBy: message.author.id });
+        staffTracker.logStaffAction(message.guild.id, message.author.id, 'ticket_claim', { ticket: record.number, owner: record.userId });
+      }
 
       return message.channel.send({
         embeds: [
@@ -788,6 +885,18 @@ module.exports = {
         });
       }
 
+      await finalizeTicketClose(
+        interaction.guild,
+        channel,
+        settings,
+        record,
+        interaction.user.id,
+        interaction.user.tag,
+        'Closed with the ticket button'
+      ).catch(function (err) {
+        console.error('Ticket close finalize error:', err.message);
+      });
+
       await interaction.reply({
         embeds: [
           new EmbedBuilder()
@@ -854,7 +963,10 @@ module.exports = {
       await channel.setTopic('Ticket ' + (info.id || '#unknown') + ' | owner:' + (info.owner || 'unknown') + ' | claimed:' + interaction.user.id + ' | type:' + (info.type || 'General Support')).catch(function () {});
 
       const record = db.getTicketByChannel(interaction.guild.id, channel.id);
-      if (record) db.updateTicket(interaction.guild.id, record.id, { claimedBy: interaction.user.id });
+      if (record) {
+        db.updateTicket(interaction.guild.id, record.id, { claimedBy: interaction.user.id });
+        staffTracker.logStaffAction(interaction.guild.id, interaction.user.id, 'ticket_claim', { ticket: record.number, owner: record.userId });
+      }
 
       return interaction.reply({
         embeds: [

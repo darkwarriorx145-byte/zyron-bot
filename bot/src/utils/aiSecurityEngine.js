@@ -314,6 +314,14 @@ async function executeDecision(guild, settings, decision, executorId, targetId, 
       type: 'ai-security',
       source: 'ai-engine'
     });
+
+    if (executor) {
+      const notifications = require('./notifications');
+      notifications.dmSecurityAction(executor, {
+        action: decision.action,
+        reason: reason
+      }).catch(function () {});
+    }
   }
 
   const logChannel = guild.channels.cache.get(settings.logChannel) || guild.channels.cache.find(c => c.name === 'zyron-logs');

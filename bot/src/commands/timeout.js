@@ -1,6 +1,8 @@
 const { PermissionsBitField } = require('discord.js');
 const ZyronEmbedBuilder = require('../../src/utils/embedBuilder');
 const protection = require('../utils/protection');
+const staffTracker = require('../utils/staffTracker');
+const notifications = require('../utils/notifications');
 const config = require('../../config.json');
 
 function parseDuration(str) {
@@ -74,6 +76,8 @@ module.exports = {
         duration: durationInput
       });
 
+      staffTracker.logStaffAction(message.guild.id, message.author.id, 'timeout', { target: target.id, reason: reason, duration: durationInput });
+      notifications.dmSecurityAction(target, { action: 'Timeout', reason: reason }).catch(function () {});
       return message.channel.send({ embeds: [embed] });
     } catch (error) {
       console.error(error);

@@ -86,25 +86,21 @@ function getStaffMetrics(guildId, staffId) {
 function getAllStaffMetrics(guildId) {
   ensureStaffData(guildId);
   const metrics = db.data.staffMetrics[guildId] || {};
-  const settings = db.getGuild(guildId);
-  const staffRoleIds = [];
-  if (settings.ticketStaffRole) staffRoleIds.push(settings.ticketStaffRole);
-  (settings.ticketStaffRoles || []).forEach(id => { if (!staffRoleIds.includes(id)) staffRoleIds.push(id); });
-  (settings.staffApplyAcceptRoles || []).forEach(id => { if (!staffRoleIds.includes(id)) staffRoleIds.push(id); });
-  if (settings.staffApplyAcceptRole && !staffRoleIds.includes(settings.staffApplyAcceptRole)) staffRoleIds.push(settings.staffApplyAcceptRole);
 
-  return staffRoleIds.map(roleId => {
-    const m = metrics[roleId] || { ticketsClosed: 0, ticketsClaimed: 0, messagesInTickets: 0, moderationActions: 0, bans: 0, kicks: 0, timeouts: 0, warns: 0, appealsReviewed: 0, appealsApproved: 0, appealsDenied: 0, firstResponseTimes: [], lastActive: 0 };
-    const avgResponse = m.firstResponseTimes.length > 0
-      ? Math.round(m.firstResponseTimes.reduce((a, b) => a + b, 0) / m.firstResponseTimes.length / 60000)
+  return Object.keys(metrics).map(function (staffId) {
+    const m = metrics[staffId];
+    const avgResponse = m.firstResponseTimes && m.firstResponseTimes.length > 0
+      ? Math.round(m.firstResponseTimes.reduce(function (a, b) { return a + b; }, 0) / m.firstResponseTimes.length / 60000)
       : null;
-    return {
-      roleId: roleId,
-      ...m,
+    return Object.assign({}, m, {
+      userId: staffId,
+      staffId: staffId,
       avgResponseTimeMinutes: avgResponse,
       efficiencyScore: calculateEfficiency(m)
-    };
-  }).filter(m => m.ticketsClosed > 0 || m.moderationActions > 0 || m.appealsReviewed > 0);
+    });
+  }).filter(function (m) {
+    return m.ticketsClosed > 0 || m.moderationActions > 0 || m.appealsReviewed > 0 || m.ticketsClaimed > 0;
+  });
 }
 
 function calculateEfficiency(m) {
@@ -139,15 +135,14 @@ function generateAdvice(guildId) {
   const all = getAllStaffMetrics(guildId);
   const cutoff = Date.now() - 30 * 86400000;
   return all.map(m => {
-    const recentCloses = (m.recentTicketCloses || 0);
-    if (m.efficiencyScore >= 500 && m.ticketsClosed >= 5) {
-      return { roleId: m.roleId, action: 'promote', reason: 'High efficiency (' + m.efficiencyScore + ') and ' + m.ticketsClosed + ' closes', priority: 'high' };
+    if (m.efficiencyScore >= 300 && m.ticketsClosed >= 3) {
+      return { userId: m.userId, action: 'promote', reason: 'High efficiency (' + m.efficiencyScore + ') and ' + m.ticketsClosed + ' closes', priority: 'high' };
     }
     if (m.lastActive < cutoff && (m.ticketsClosed > 0 || m.moderationActions > 0)) {
-      return { roleId: m.roleId, action: 'demote', reason: 'Inactive for 30+ days (last: ' + new Date(m.lastActive).toLocaleDateString() + ')', priority: 'medium' };
+      return { userId: m.userId, action: 'demote', reason: 'Inactive for 30+ days (last: ' + new Date(m.lastActive || Date.now()).toLocaleDateString() + ')', priority: 'medium' };
     }
     if (m.ticketsClosed === 0 && m.moderationActions === 0 && m.appealsReviewed === 0) {
-      return { roleId: m.roleId, action: 'review', reason: 'No recorded activity in 30 days', priority: 'low' };
+      return { userId: m.userId, action: 'review', reason: 'No recorded activity in 30 days', priority: 'low' };
     }
     return null;
   }).filter(Boolean);

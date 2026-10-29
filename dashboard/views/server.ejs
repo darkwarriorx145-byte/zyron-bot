@@ -462,6 +462,7 @@
           <div class="stat-card glass"><span>Total tickets</span><strong><%= activity.ticketStats.total %></strong></div>
           <div class="stat-card glass"><span>Open</span><strong><%= activity.ticketStats.open %></strong></div>
           <div class="stat-card glass"><span>Closed</span><strong><%= activity.ticketStats.closed %></strong></div>
+          <div class="stat-card glass"><span>Avg rating</span><strong><%= activity.ticketRatings && activity.ticketRatings.average ? activity.ticketRatings.average + '/5' : '—' %></strong></div>
           <div class="stat-card glass"><span>Pending appeals</span><strong><%= activity.appealStats.pending %></strong></div>
         </div>
 
@@ -685,6 +686,33 @@
                     <button type="button" class="btn btn-ghost btn-sm" data-staff-action="demote" data-staff-user="<%= advice.userId %>">Demote</button>
                     <button type="button" class="btn btn-ghost btn-sm" data-staff-action="remove" data-staff-user="<%= advice.userId %>">Remove</button>
                   </span>
+                </div>
+              <% }); %>
+            </div>
+          <% } %>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'star', size: 18 }) %></span>
+              <div>
+                <h3>Staff leaderboard</h3>
+                <p class="muted">Efficiency is scored from ticket closes, replies, moderation actions and appeal reviews.</p>
+              </div>
+            </div>
+          </div>
+          <% if (!activity.staffLeaderboard || activity.staffLeaderboard.length === 0) { %>
+            <div class="empty-inline">No staff activity recorded yet.</div>
+          <% } else { %>
+            <div class="data-list">
+              <% activity.staffLeaderboard.forEach(function (member, index) { %>
+                <div class="data-row">
+                  <span>
+                    <strong>#<%= index + 1 %> &lt;@<%= member.userId %>&gt;</strong>
+                    <small><%= member.ticketsClosed || 0 %> closes - <%= member.moderationActions || 0 %> mod actions - <%= member.appealsReviewed || 0 %> appeals<% if (member.avgResponseTimeMinutes !== null && member.avgResponseTimeMinutes !== undefined) { %> - avg reply <%= member.avgResponseTimeMinutes %>m<% } %></small>
+                  </span>
+                  <span class="badge badge-success"><%= member.efficiencyScore || 0 %> pts</span>
                 </div>
               <% }); %>
             </div>
@@ -1016,6 +1044,341 @@
         </div>
       </section>
 
+      <section class="panel" data-panel="modules" id="panel-modules">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Platform</span>
+            <h2>Modules</h2>
+            <p class="muted">Verification, custom commands, role panels, maintenance mode, purge tools, nicknames, vouches and feedback.</p>
+          </div>
+          <span class="badge <%= activity.maintenanceMode ? 'badge-warning' : 'badge-success' %>"><%= activity.maintenanceMode ? 'Maintenance active' : 'All systems live' %></span>
+        </div>
+
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'shield-check', size: 18 }) %></span>
+                <div>
+                  <h3>Verification</h3>
+                  <p class="muted">New members accept the rules before they can see the server.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field span-1">
+              <span>Verification channel</span>
+              <select class="input" data-channel-picker id="verifyChannel" data-selected="<%= settings.verificationChannel || '' %>"></select>
+            </label>
+            <label class="field span-1">
+              <span>Verified role</span>
+              <select class="input" data-role-picker id="verifyRole" data-selected="<%= settings.verificationRole || '' %>"></select>
+            </label>
+            <label class="field span-1">
+              <span>Log channel (optional)</span>
+              <select class="input" data-channel-picker id="verifyLog" data-selected="<%= settings.verificationLogChannel || '' %>"></select>
+            </label>
+            <label class="field span-1">
+              <span>Delivery mode</span>
+              <select class="input" id="verifyMode">
+                <option value="button" <%= settings.verificationMode === 'button' ? 'selected' : '' %>>Panel button</option>
+                <option value="dm" <%= settings.verificationMode === 'dm' ? 'selected' : '' %>>DM on join</option>
+                <option value="channel" <%= settings.verificationMode === 'channel' ? 'selected' : '' %>>Channel only</option>
+              </select>
+            </label>
+            <label class="field span-2">
+              <span>Rules text</span>
+              <textarea class="input" id="verifyRules" rows="5" maxlength="4000" placeholder="1. Be respectful..."><%= settings.verificationRules || '' %></textarea>
+            </label>
+            <label class="field span-2">
+              <span class="checkbox-row"><input type="checkbox" id="verifyEnabled" <%= settings.verificationEnabled ? 'checked' : '' %>> Verification enabled</span>
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-mod-action="save-verification">Save &amp; send panel</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'tool', size: 18 }) %></span>
+                <div>
+                  <h3>Maintenance mode</h3>
+                  <p class="muted">Hide every channel, keep staff roles visible and post a public notice.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field span-2">
+              <span>Maintenance message</span>
+              <textarea class="input" id="maintenanceMessage" rows="3" maxlength="2000"><%= settings.maintenanceMessage || 'The server is currently under maintenance. Please check back later.' %></textarea>
+            </label>
+            <label class="field span-2">
+              <span>Staff role IDs allowed to see channels (comma separated)</span>
+              <input class="input" id="maintenanceRoles" type="text" value="<%= (settings.maintenanceAllowedRoles || []).join(', ') %>" placeholder="123456789012345678, 987654321098765432">
+            </label>
+            <label class="field span-2">
+              <span>Announcement text</span>
+              <textarea class="input" id="maintenanceAnnounce" rows="2" maxlength="2000" placeholder="Optional update for the maintenance channel."></textarea>
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-mod-action="maintenance-on">Enable maintenance</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-mod-action="maintenance-off">Disable</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-mod-action="maintenance-announce">Send update</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'terminal', size: 18 }) %></span>
+              <div>
+                <h3>Custom commands</h3>
+                <p class="muted">Create text or embed commands with live preview, cooldowns and role or channel locks.</p>
+              </div>
+            </div>
+          </div>
+          <div class="panel-grid two">
+            <div>
+              <label class="field span-1">
+                <span>Command name</span>
+                <input class="input" id="ccName" type="text" maxlength="32" placeholder="rules">
+              </label>
+              <label class="field span-1">
+                <span>Type</span>
+                <select class="input" id="ccType">
+                  <option value="text">Plain text</option>
+                  <option value="embed">Embed</option>
+                </select>
+              </label>
+              <label class="field span-1">
+                <span>Cooldown (seconds)</span>
+                <input class="input" id="ccCooldown" type="number" min="0" max="86400" value="0">
+              </label>
+              <label class="field span-1">
+                <span>Allowed role IDs (optional)</span>
+                <input class="input" id="ccRoles" type="text" placeholder="123..., 456...">
+              </label>
+              <label class="field span-2">
+                <span>Response text</span>
+                <textarea class="input" id="ccResponse" rows="3" maxlength="2000" placeholder="Welcome to the server!"></textarea>
+              </label>
+              <label class="field span-1">
+                <span>Embed title (optional)</span>
+                <input class="input" id="ccEmbedTitle" type="text" maxlength="120">
+              </label>
+              <label class="field span-1">
+                <span>Embed color</span>
+                <input class="input" id="ccEmbedColor" type="text" maxlength="7" value="#5865F2">
+              </label>
+              <label class="field span-2">
+                <span>Embed description (optional)</span>
+                <textarea class="input" id="ccEmbedDescription" rows="2" maxlength="4000"></textarea>
+              </label>
+              <div class="row-actions">
+                <button type="button" class="btn btn-primary btn-sm" data-mod-action="custom-command-save">Save command</button>
+                <button type="button" class="btn btn-ghost btn-sm" data-mod-action="custom-command-reset">New</button>
+              </div>
+              <input type="hidden" id="ccEditing">
+            </div>
+            <div>
+              <div class="cc-preview" id="ccPreview">
+                <h4>Live preview</h4>
+                <div class="cc-preview-body" id="ccPreviewBody"></div>
+              </div>
+              <div class="data-list" id="customCommandsList"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'tag', size: 18 }) %></span>
+              <div>
+                <h3>Reaction roles &amp; dropdown roles</h3>
+                <p class="muted">Publish persistent button or dropdown panels members can use to pick roles.</p>
+              </div>
+            </div>
+          </div>
+          <div class="panel-grid two">
+            <div>
+              <label class="field span-1">
+                <span>Panel channel</span>
+                <select class="input" data-channel-picker id="rrChannel"></select>
+              </label>
+              <label class="field span-1">
+                <span>Role</span>
+                <select class="input" data-role-picker id="rrRole"></select>
+              </label>
+              <label class="field span-1">
+                <span>Panel type</span>
+                <select class="input" id="rrType">
+                  <option value="button">Button</option>
+                  <option value="dropdown">Dropdown</option>
+                </select>
+              </label>
+              <label class="field span-1">
+                <span>Label</span>
+                <input class="input" id="rrLabel" type="text" maxlength="80" placeholder="Select your roles">
+              </label>
+              <label class="field span-1">
+                <span>Emoji</span>
+                <input class="input" id="rrEmoji" type="text" maxlength="64" placeholder="🎭">
+              </label>
+              <label class="field span-1">
+                <span>Max roles per member</span>
+                <input class="input" id="rrMax" type="number" min="0" max="50" value="0">
+              </label>
+              <label class="field span-2">
+                <span>Description</span>
+                <textarea class="input" id="rrDescription" rows="2" maxlength="500"></textarea>
+              </label>
+              <div class="row-actions">
+                <button type="button" class="btn btn-primary btn-sm" data-mod-action="reaction-role-save">Publish panel</button>
+              </div>
+            </div>
+            <div class="data-list" id="reactionRolesList"></div>
+          </div>
+        </div>
+
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'trash', size: 18 }) %></span>
+                <div>
+                  <h3>Message purge tools</h3>
+                  <p class="muted">Filter by author, text, bots, links, invites, media and embeds.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field span-1">
+              <span>Channel</span>
+              <select class="input" data-channel-picker id="purgeChannel"></select>
+            </label>
+            <label class="field span-1">
+              <span>Limit</span>
+              <input class="input" id="purgeLimit" type="number" min="1" max="1000" value="100">
+            </label>
+            <label class="field span-1">
+              <span>Author ID (optional)</span>
+              <input class="input" id="purgeUser" type="text" maxlength="25">
+            </label>
+            <label class="field span-1">
+              <span>Contains text (optional)</span>
+              <input class="input" id="purgeContains" type="text" maxlength="100">
+            </label>
+            <div class="checkbox-grid span-2">
+              <label><input type="checkbox" id="purgeBots"> Bots only</label>
+              <label><input type="checkbox" id="purgeLinks"> Links</label>
+              <label><input type="checkbox" id="purgeInvites"> Invites</label>
+              <label><input type="checkbox" id="purgeImages"> Images</label>
+              <label><input type="checkbox" id="purgeEmbeds"> Embeds</label>
+              <label><input type="checkbox" id="purgePinned"> Keep pinned</label>
+            </div>
+            <div class="row-actions">
+              <button type="button" class="btn btn-danger btn-sm" data-mod-action="purge">Purge messages</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'user-check', size: 18 }) %></span>
+                <div>
+                  <h3>Nickname management</h3>
+                  <p class="muted">Set or reset nicknames and strip banned patterns automatically.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field span-1">
+              <span>Member ID</span>
+              <input class="input" id="nickUser" type="text" maxlength="25" placeholder="123456789012345678">
+            </label>
+            <label class="field span-1">
+              <span>New nickname</span>
+              <input class="input" id="nickValue" type="text" maxlength="32" placeholder="Leave blank to reset">
+            </label>
+            <label class="field span-2">
+              <span>Banned patterns (one per line)</span>
+              <textarea class="input" id="nickPatterns" rows="3" placeholder="discord.gg/&#10;https?://"><%= (settings.bannedNickPatterns || []).join('\n') %></textarea>
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-mod-action="nickname-set">Set nickname</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-mod-action="nickname-reset">Reset</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'bell', size: 18 }) %></span>
+                <div>
+                  <h3>Notifications &amp; vouches</h3>
+                  <p class="muted">Where vouches and feedback land, and which DMs members receive.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field span-1">
+              <span>Vouch log channel</span>
+              <select class="input" data-channel-picker id="vouchChannel" data-selected="<%= settings.vouchLogChannel || '' %>"></select>
+            </label>
+            <label class="field span-1">
+              <span>Feedback channel</span>
+              <select class="input" data-channel-picker id="feedbackChannel" data-selected="<%= settings.feedbackChannel || '' %>"></select>
+            </label>
+            <label class="field span-1">
+              <span>Invite log channel</span>
+              <select class="input" data-channel-picker id="inviteLogChannel" data-selected="<%= settings.inviteLogChannel || '' %>"></select>
+            </label>
+            <label class="field span-1">
+              <span>Nickname log channel</span>
+              <select class="input" data-channel-picker id="nicknameLogChannel" data-selected="<%= settings.nicknameLogChannel || '' %>"></select>
+            </label>
+            <div class="checkbox-grid span-2">
+              <label><input type="checkbox" id="dmWarnings" <%= settings.dmWarnings !== false ? 'checked' : '' %>> DM warnings</label>
+              <label><input type="checkbox" id="dmSecurity" <%= settings.dmSecurity !== false ? 'checked' : '' %>> DM security actions</label>
+              <label><input type="checkbox" id="dmTicketUpdates" <%= settings.dmTicketUpdates !== false ? 'checked' : '' %>> DM ticket open/close</label>
+              <label><input type="checkbox" id="dmFeedback" <%= settings.dmFeedback !== false ? 'checked' : '' %>> DM feedback prompts</label>
+              <label><input type="checkbox" id="ticketRatingsEnabled" <%= settings.ticketRatingsEnabled !== false ? 'checked' : '' %>> Ticket ratings</label>
+              <label><input type="checkbox" id="ticketPriorityEnabled" <%= settings.ticketPriorityEnabled ? 'checked' : '' %>> Ticket priority</label>
+            </div>
+            <label class="field span-2">
+              <span>Ticket priorities (comma separated)</span>
+              <input class="input" id="ticketPriorities" type="text" value="<%= (settings.ticketPriorities || ['Low','Normal','High','Urgent']).join(', ') %>">
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-mod-action="notifications-save">Save notification settings</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'star', size: 18 }) %></span>
+                <div>
+                  <h3>Vouch leaderboard</h3>
+                  <p class="muted">Members with the most vouches and their average rating.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list" id="vouchLeaderboard"></div>
+            <div class="card-head" style="margin-top:18px">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'users', size: 18 }) %></span>
+                <div>
+                  <h3>Invite leaderboard</h3>
+                  <p class="muted">Top inviters tracked by the enhanced invite logger.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list" id="inviteLeaderboard"></div>
+          </div>
+        </div>
+      </section>
+
       <section class="panel" data-panel="settings" id="panel-settings">
         <div class="panel-head">
           <div>
@@ -1111,7 +1474,8 @@
       ticketButtons: <%- safeJson(settings.ticketButtons || []) %>,
       staffQuestions: <%- safeJson(settings.staffApplyQuestions || []) %>,
       ticketButtonStyles: <%- safeJson(ticketButtonStyles) %>,
-      staffQuestionStyles: <%- safeJson(staffQuestionStyles) %>
+      staffQuestionStyles: <%- safeJson(staffQuestionStyles) %>,
+      activity: <%- safeJson(activity) %>
     };
   </script>
   <script>
@@ -1762,6 +2126,359 @@
       renderStaffQuestions();
       updateTicketPreview();
       updateStaffPreview();
+    })();
+  </script>
+  <script>
+    (function () {
+      var Z = window.ZYRON || {};
+      var serverId = Z.serverId;
+      var activity = Z.activity || {};
+      var toastEl = document.getElementById('toast');
+      var customCommands = Array.isArray(activity.customCommands) ? activity.customCommands.slice() : [];
+
+      function byId(id) { return document.getElementById(id); }
+      function val(id) { var el = byId(id); return el ? el.value : ''; }
+      function checked(id) { var el = byId(id); return el ? el.checked : false; }
+      function splitIds(text) {
+        return String(text || '').split(',').map(function (part) { return part.trim(); }).filter(function (part) {
+          return /^\d{15,25}$/.test(part);
+        });
+      }
+      function escapeHtml(text) {
+        return String(text == null ? '' : text)
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+      }
+      function toast(message, type) {
+        if (!toastEl) return;
+        toastEl.textContent = message;
+        toastEl.className = 'toast show ' + (type || '');
+        window.clearTimeout(toastEl._timer);
+        toastEl._timer = window.setTimeout(function () { toastEl.className = 'toast'; }, 3600);
+      }
+      function api(path, body, method) {
+        return fetch('/api/server/' + encodeURIComponent(serverId) + path, {
+          method: method || 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: body === undefined ? undefined : JSON.stringify(body)
+        }).then(function (response) {
+          return response.json().catch(function () { return {}; }).then(function (data) {
+            if (!response.ok || data.ok === false) throw new Error(data.error || ('Request failed (' + response.status + ')'));
+            return data;
+          });
+        });
+      }
+
+      function renderCustomCommands() {
+        var list = byId('customCommandsList');
+        if (!list) return;
+        list.innerHTML = '';
+        if (customCommands.length === 0) {
+          list.innerHTML = '<div class="empty-inline">No custom commands yet.</div>';
+          return;
+        }
+        customCommands.forEach(function (command) {
+          var row = document.createElement('div');
+          row.className = 'data-row';
+          var info = document.createElement('span');
+          info.innerHTML = '<strong>.' + escapeHtml(command.name) + '</strong><small>' +
+            escapeHtml(command.type) + ' &middot; ' + (command.uses || 0) + ' uses' +
+            (command.cooldown ? ' &middot; ' + command.cooldown + 's cooldown' : '') + '</small>';
+          var actions = document.createElement('span');
+          actions.className = 'row-actions';
+          var edit = document.createElement('button');
+          edit.type = 'button';
+          edit.className = 'btn btn-ghost btn-sm';
+          edit.textContent = 'Edit';
+          edit.addEventListener('click', function () { editCommand(command); });
+          var remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'btn btn-ghost btn-sm';
+          remove.textContent = 'Delete';
+          remove.addEventListener('click', function () {
+            if (!window.confirm('Delete .' + command.name + '?')) return;
+            api('/custom-command', { deleteId: command.id }).then(function () {
+              toast('Command deleted.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 700);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          });
+          actions.appendChild(edit);
+          actions.appendChild(remove);
+          row.appendChild(info);
+          row.appendChild(actions);
+          list.appendChild(row);
+        });
+      }
+
+      function editCommand(command) {
+        byId('ccEditing').value = command.id;
+        byId('ccName').value = command.name;
+        byId('ccName').readOnly = true;
+        byId('ccType').value = command.type || 'text';
+        byId('ccCooldown').value = command.cooldown || 0;
+        byId('ccRoles').value = (command.allowedRoles || []).join(', ');
+        byId('ccResponse').value = command.response || '';
+        var embed = command.embed || {};
+        byId('ccEmbedTitle').value = embed.title || '';
+        byId('ccEmbedColor').value = embed.color || '#5865F2';
+        byId('ccEmbedDescription').value = embed.description || '';
+        updatePreview();
+      }
+
+      function resetCommandForm() {
+        byId('ccEditing').value = '';
+        byId('ccName').value = '';
+        byId('ccName').readOnly = false;
+        byId('ccType').value = 'text';
+        byId('ccCooldown').value = 0;
+        byId('ccRoles').value = '';
+        byId('ccResponse').value = '';
+        byId('ccEmbedTitle').value = '';
+        byId('ccEmbedColor').value = '#5865F2';
+        byId('ccEmbedDescription').value = '';
+        updatePreview();
+      }
+
+      function updatePreview() {
+        var body = byId('ccPreviewBody');
+        if (!body) return;
+        var type = val('ccType');
+        var response = val('ccResponse');
+        var title = val('ccEmbedTitle');
+        var description = val('ccEmbedDescription');
+        var color = val('ccEmbedColor') || '#5865F2';
+        if (type === 'embed') {
+          body.innerHTML = '<div class="cc-embed" style="border-left:4px solid ' + escapeHtml(color) + '">' +
+            (title ? '<strong>' + escapeHtml(title) + '</strong>' : '') +
+            '<p>' + escapeHtml(description || response || 'Embed description preview') + '</p></div>';
+        } else {
+          body.innerHTML = '<p>' + escapeHtml(response || 'Your command response preview') + '</p>';
+        }
+      }
+
+      function saveCustomCommand() {
+        var name = val('ccName').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+        if (!name) { toast('Enter a command name.', 'error'); return; }
+        var type = val('ccType');
+        var command = {
+          name: name,
+          type: type,
+          response: val('ccResponse'),
+          cooldown: Number(val('ccCooldown')) || 0,
+          allowedRoles: splitIds(val('ccRoles')),
+          embed: type === 'embed' ? {
+            title: val('ccEmbedTitle'),
+            description: val('ccEmbedDescription'),
+            color: val('ccEmbedColor') || '#5865F2'
+          } : null
+        };
+        var editing = val('ccEditing');
+        var payload = editing ? { updateId: editing, command: command } : { command: command };
+        api('/custom-command', payload).then(function () {
+          toast(editing ? 'Command updated.' : 'Command created.', 'success');
+          window.setTimeout(function () { window.location.reload(); }, 700);
+        }).catch(function (err) { toast(err.message, 'error'); });
+      }
+
+      function renderReactionRoles() {
+        var list = byId('reactionRolesList');
+        if (!list) return;
+        var panels = Array.isArray(activity.reactionRoles) ? activity.reactionRoles : [];
+        list.innerHTML = '';
+        if (panels.length === 0) {
+          list.innerHTML = '<div class="empty-inline">No role panels yet.</div>';
+          return;
+        }
+        panels.forEach(function (panel) {
+          var row = document.createElement('div');
+          row.className = 'data-row';
+          var info = document.createElement('span');
+          info.innerHTML = '<strong>' + escapeHtml(panel.label || panel.type) + '</strong><small>Role ' +
+            escapeHtml(panel.roleId) + ' &middot; ' + escapeHtml(panel.type) + '</small>';
+          var actions = document.createElement('span');
+          actions.className = 'row-actions';
+          var publish = document.createElement('button');
+          publish.type = 'button';
+          publish.className = 'btn btn-ghost btn-sm';
+          publish.textContent = 'Republish';
+          publish.addEventListener('click', function () {
+            api('/reaction-role', { publishId: panel.id }).then(function () {
+              toast('Panel republished.', 'success');
+            }).catch(function (err) { toast(err.message, 'error'); });
+          });
+          var remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'btn btn-ghost btn-sm';
+          remove.textContent = 'Delete';
+          remove.addEventListener('click', function () {
+            if (!window.confirm('Delete this role panel?')) return;
+            api('/reaction-role', { deleteId: panel.id }).then(function () {
+              toast('Panel deleted.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 700);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          });
+          actions.appendChild(publish);
+          actions.appendChild(remove);
+          row.appendChild(info);
+          row.appendChild(actions);
+          list.appendChild(row);
+        });
+      }
+
+      function renderLeaderboards() {
+        var vouchList = byId('vouchLeaderboard');
+        if (vouchList) {
+          var leaderboard = (activity.vouchStats && activity.vouchStats.leaderboard) || [];
+          vouchList.innerHTML = leaderboard.length ? leaderboard.map(function (entry, index) {
+            return '<div class="data-row"><span><strong>#' + (index + 1) + ' &lt;@' + escapeHtml(entry.userId) + '&gt;</strong>' +
+              '<small>' + (entry.count || 0) + ' vouches &middot; avg ' + (entry.avg || 0) + '/5</small></span></div>';
+          }).join('') : '<div class="empty-inline">No vouches yet. Members can use .vouch @user.</div>';
+        }
+        var inviteList = byId('inviteLeaderboard');
+        if (inviteList) {
+          var invites = Array.isArray(activity.inviteLeaderboard) ? activity.inviteLeaderboard : [];
+          inviteList.innerHTML = invites.length ? invites.map(function (entry, index) {
+            return '<div class="data-row"><span><strong>#' + (index + 1) + ' &lt;@' + escapeHtml(entry.userId) + '&gt;</strong>' +
+              '<small>' + (entry.amount || 0) + ' invites</small></span></div>';
+          }).join('') : '<div class="empty-inline">No tracked invites yet.</div>';
+        }
+      }
+
+      function populatePickers() {
+        var channelPickers = document.querySelectorAll('[data-channel-picker]');
+        var rolePickers = document.querySelectorAll('[data-role-picker]');
+        if (channelPickers.length === 0 && rolePickers.length === 0) return;
+        api('/picker', undefined, 'GET').then(function (data) {
+          var channels = data.channels || [];
+          var roles = data.roles || [];
+          channelPickers.forEach(function (select) {
+            var selected = select.getAttribute('data-selected') || select.value || '';
+            select.innerHTML = '<option value="">— None —</option>' + channels.map(function (channel) {
+              var label = (channel.type === 4 ? '📁 ' : (channel.type === 2 ? '🔊 ' : '# ')) + channel.name;
+              return '<option value="' + escapeHtml(channel.id) + '">' + escapeHtml(label) + '</option>';
+            }).join('');
+            if (selected) select.value = selected;
+          });
+          rolePickers.forEach(function (select) {
+            var selected = select.getAttribute('data-selected') || select.value || '';
+            select.innerHTML = '<option value="">— None —</option>' + roles.map(function (role) {
+              return '<option value="' + escapeHtml(role.id) + '">' + escapeHtml(role.name) + '</option>';
+            }).join('');
+            if (selected) select.value = selected;
+          });
+        }).catch(function (err) {
+          toast('Could not load channels and roles: ' + err.message, 'error');
+        });
+      }
+
+      document.querySelectorAll('[data-mod-action]').forEach(function (button) {
+        button.addEventListener('click', function () {
+          var action = button.getAttribute('data-mod-action');
+          if (action === 'save-verification') {
+            api('/verification', {
+              channelId: val('verifyChannel'),
+              roleId: val('verifyRole'),
+              logChannelId: val('verifyLog'),
+              rules: val('verifyRules'),
+              mode: val('verifyMode'),
+              enabled: checked('verifyEnabled')
+            }).then(function () {
+              toast('Verification saved and panel sent.', 'success');
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'maintenance-on') {
+            if (!window.confirm('Hide every channel and enable maintenance mode?')) return;
+            api('/maintenance', {
+              enabled: true,
+              message: val('maintenanceMessage'),
+              allowedRoles: splitIds(val('maintenanceRoles'))
+            }).then(function () {
+              toast('Maintenance mode enabled.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 900);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'maintenance-off') {
+            api('/maintenance', { enabled: false }).then(function () {
+              toast('Maintenance mode disabled.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 900);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'maintenance-announce') {
+            api('/maintenance', { announce: val('maintenanceAnnounce') }).then(function () {
+              toast('Announcement sent.', 'success');
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'custom-command-save') {
+            saveCustomCommand();
+          } else if (action === 'custom-command-reset') {
+            resetCommandForm();
+          } else if (action === 'reaction-role-save') {
+            api('/reaction-role', {
+              channelId: val('rrChannel'),
+              roleId: val('rrRole'),
+              type: val('rrType'),
+              label: val('rrLabel'),
+              emoji: val('rrEmoji'),
+              description: val('rrDescription'),
+              maxRoles: Number(val('rrMax')) || 0
+            }).then(function () {
+              toast('Role panel published.', 'success');
+              window.setTimeout(function () { window.location.reload(); }, 800);
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'purge') {
+            if (!window.confirm('Delete matching messages in this channel?')) return;
+            api('/purge', {
+              channelId: val('purgeChannel'),
+              options: {
+                limit: Number(val('purgeLimit')) || 100,
+                userId: val('purgeUser').trim() || undefined,
+                contains: val('purgeContains').trim() || undefined,
+                bot: checked('purgeBots'),
+                links: checked('purgeLinks'),
+                invites: checked('purgeInvites'),
+                images: checked('purgeImages'),
+                embeds: checked('purgeEmbeds'),
+                pinned: checked('purgePinned')
+              }
+            }).then(function (data) {
+              toast('Purged ' + (data.deleted || 0) + ' messages.', 'success');
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'nickname-set') {
+            api('/nickname', { userId: val('nickUser'), nickname: val('nickValue') }).then(function () {
+              toast('Nickname updated.', 'success');
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'nickname-reset') {
+            api('/nickname', { userId: val('nickUser'), reset: true }).then(function () {
+              toast('Nickname reset.', 'success');
+            }).catch(function (err) { toast(err.message, 'error'); });
+          } else if (action === 'notifications-save') {
+            api('/update', {
+              vouchLogChannel: val('vouchChannel') || null,
+              feedbackChannel: val('feedbackChannel') || null,
+              inviteLogChannel: val('inviteLogChannel') || null,
+              nicknameLogChannel: val('nicknameLogChannel') || null,
+              dmWarnings: checked('dmWarnings'),
+              dmSecurity: checked('dmSecurity'),
+              dmTicketUpdates: checked('dmTicketUpdates'),
+              dmFeedback: checked('dmFeedback'),
+              ticketRatingsEnabled: checked('ticketRatingsEnabled'),
+              ticketPriorityEnabled: checked('ticketPriorityEnabled'),
+              ticketPriorities: String(val('ticketPriorities') || '').split(',').map(function (p) { return p.trim(); }).filter(Boolean),
+              bannedNickPatterns: String(val('nickPatterns') || '').split('\n').map(function (p) { return p.trim(); }).filter(Boolean)
+            }).then(function () {
+              toast('Notification settings saved.', 'success');
+            }).catch(function (err) { toast(err.message, 'error'); });
+          }
+        });
+      });
+
+      ['ccResponse', 'ccType', 'ccEmbedTitle', 'ccEmbedDescription', 'ccEmbedColor'].forEach(function (id) {
+        var el = byId(id);
+        if (el) el.addEventListener('input', updatePreview);
+        if (el) el.addEventListener('change', updatePreview);
+      });
+
+      renderCustomCommands();
+      renderReactionRoles();
+      renderLeaderboards();
+      updatePreview();
+      populatePickers();
     })();
   </script>
 </body>

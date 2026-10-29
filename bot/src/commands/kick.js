@@ -1,6 +1,8 @@
 const { PermissionsBitField } = require('discord.js');
 const ZyronEmbedBuilder = require('../../src/utils/embedBuilder');
 const protection = require('../utils/protection');
+const staffTracker = require('../utils/staffTracker');
+const notifications = require('../utils/notifications');
 const config = require('../../config.json');
 
 module.exports = {
@@ -50,6 +52,8 @@ module.exports = {
         reason: reason
       });
       message.channel.send({ embeds: [embed] });
+      staffTracker.logStaffAction(message.guild.id, message.author.id, 'kick', { target: target.id, reason: reason });
+      notifications.dmSecurityAction(target, { action: 'Kick', reason: reason }).catch(function () {});
     } catch (error) {
       console.error(error);
       message.reply({ embeds: [ZyronEmbedBuilder.error('Kick Error', 'There was an error trying to kick this user.')] });

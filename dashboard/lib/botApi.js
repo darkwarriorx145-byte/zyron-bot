@@ -105,6 +105,70 @@ async function staffAction(guildId, payload) {
   return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/staff/action', payload || {});
 }
 
+async function listChannels(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/channels');
+}
+
+async function listRoles(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/roles');
+}
+
+async function listCustomCommands(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/custom-commands');
+}
+
+async function createCustomCommand(guildId, payload) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/custom-commands', payload || {});
+}
+
+async function updateCustomCommand(guildId, commandId, payload) {
+  return request('PATCH', '/api/guilds/' + encodeURIComponent(guildId) + '/custom-commands/' + encodeURIComponent(commandId), payload || {});
+}
+
+async function deleteCustomCommand(guildId, commandId) {
+  return request('DELETE', '/api/guilds/' + encodeURIComponent(guildId) + '/custom-commands/' + encodeURIComponent(commandId));
+}
+
+async function listReactionRoles(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/reaction-roles');
+}
+
+async function createReactionRole(guildId, payload) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/reaction-roles', payload || {});
+}
+
+async function deleteReactionRole(guildId, panelId) {
+  return request('DELETE', '/api/guilds/' + encodeURIComponent(guildId) + '/reaction-roles/' + encodeURIComponent(panelId));
+}
+
+async function publishReactionRole(guildId, panelId) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/reaction-roles/' + encodeURIComponent(panelId) + '/publish');
+}
+
+async function setupVerification(guildId, payload) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/verification', payload || {});
+}
+
+async function getVerification(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/verification');
+}
+
+async function setMaintenance(guildId, payload) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/maintenance', payload || {});
+}
+
+async function getMaintenance(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/maintenance');
+}
+
+async function purge(guildId, payload) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/purge', payload || {});
+}
+
+async function setNickname(guildId, payload) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/nickname', payload || {});
+}
+
 let lastHeartbeatAt = 0;
 
 async function heartbeat(payload, force) {
@@ -163,6 +227,22 @@ module.exports = {
   getActivity: getActivity,
   reviewAppeal: reviewAppeal,
   staffAction: staffAction,
+  listChannels: listChannels,
+  listRoles: listRoles,
+  listCustomCommands: listCustomCommands,
+  createCustomCommand: createCustomCommand,
+  updateCustomCommand: updateCustomCommand,
+  deleteCustomCommand: deleteCustomCommand,
+  listReactionRoles: listReactionRoles,
+  createReactionRole: createReactionRole,
+  deleteReactionRole: deleteReactionRole,
+  publishReactionRole: publishReactionRole,
+  setupVerification: setupVerification,
+  getVerification: getVerification,
+  setMaintenance: setMaintenance,
+  getMaintenance: getMaintenance,
+  purge: purge,
+  setNickname: setNickname,
   heartbeat: heartbeat,
   test: test
 };

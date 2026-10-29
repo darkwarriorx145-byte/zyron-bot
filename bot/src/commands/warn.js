@@ -2,6 +2,8 @@ const { PermissionsBitField } = require('discord.js');
 const ZyronEmbedBuilder = require('../utils/embedBuilder');
 const db = require('../database/db');
 const protection = require('../utils/protection');
+const notifications = require('../utils/notifications');
+const staffTracker = require('../utils/staffTracker');
 const config = require('../../config.json');
 
 module.exports = {
@@ -60,6 +62,7 @@ module.exports = {
     }
 
     try {
+      const settings = db.getGuild(message.guild.id);
       db.addWarning(message.guild.id, target.id, { reason: reason, moderator: message.author.id });
 
       const embed = ZyronEmbedBuilder.moderationAction({
@@ -71,13 +74,22 @@ module.exports = {
 
       await message.channel.send({ embeds: [embed] });
 
-      const dm = ZyronEmbedBuilder.warning(
-        'You have been warned in ' + message.guild.name,
-        'Reason: ' + reason
-      );
+      const count = db.getWarnings(message.guild.id, target.id).filter(function (warning) {
+        return warning.type !== 'antinuke' && warning.type !== 'betrayal';
+      }).length;
 
-      target.send({ embeds: [dm] }).catch(function () {
+      notifications.dmWarning(target, {
+        reason: reason,
+        count: count,
+        threshold: settings.warningKickThreshold || 5,
+        guild: message.guild
+      }).catch(function () {
         console.log('Could not DM warn to ' + target.user.tag);
+      });
+
+      staffTracker.logStaffAction(message.guild.id, message.author.id, 'warn', {
+        target: target.id,
+        reason: reason
       });
 
       return true;

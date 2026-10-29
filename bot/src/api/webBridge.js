@@ -5,6 +5,15 @@ const { URL } = require('url');
 const db = require('../database/db');
 const appealUtil = require('../utils/appeal');
 const ticketAssistant = require('../utils/ticketAssistant');
+const customCommands = require('../utils/customCommands');
+const reactionRoles = require('../utils/reactionRoles');
+const vouch = require('../utils/vouch');
+const staffTracker = require('../utils/staffTracker');
+const verification = require('../utils/verification');
+const maintenance = require('../utils/maintenance');
+const enhancedInvites = require('../utils/inviteLogger');
+const nicknameUtil = require('../utils/nickname');
+const advancedPurge = require('../utils/advancedPurge');
 
 const API_KEY = process.env.BOT_API_KEY || process.env.ZYRON_API_KEY || '';
 const ENABLED = String(process.env.BOT_API_ENABLED || '').toLowerCase() === 'true' || Boolean(API_KEY);
@@ -152,6 +161,34 @@ function summarizeSettings(settings) {
     staffApplyAcceptMessage: settings.staffApplyAcceptMessage || null,
     staffApplyDenyMessage: settings.staffApplyDenyMessage || null,
     staffApplyQuestions: Array.isArray(settings.staffApplyQuestions) ? settings.staffApplyQuestions : [],
+    verificationEnabled: settings.verificationEnabled === true,
+    verificationChannel: settings.verificationChannel || null,
+    verificationRole: settings.verificationRole || null,
+    verificationRoles: Array.isArray(settings.verificationRoles) ? settings.verificationRoles : [],
+    verificationRules: settings.verificationRules || null,
+    verificationLogChannel: settings.verificationLogChannel || null,
+    verificationQuestions: Array.isArray(settings.verificationQuestions) ? settings.verificationQuestions : [],
+    verificationMode: settings.verificationMode || 'button',
+    maintenanceMode: settings.maintenanceMode === true,
+    maintenanceMessage: settings.maintenanceMessage || null,
+    maintenanceChannelId: settings.maintenanceChannelId || null,
+    maintenanceAnnouncementChannelId: settings.maintenanceAnnouncementChannelId || null,
+    maintenanceAllowedRoles: Array.isArray(settings.maintenanceAllowedRoles) ? settings.maintenanceAllowedRoles : [],
+    maintenanceStartedAt: settings.maintenanceStartedAt || null,
+    maintenanceStartedBy: settings.maintenanceStartedBy || null,
+    vouchLogChannel: settings.vouchLogChannel || null,
+    feedbackChannel: settings.feedbackChannel || null,
+    dmWarnings: settings.dmWarnings !== false,
+    dmSecurity: settings.dmSecurity !== false,
+    dmTicketUpdates: settings.dmTicketUpdates !== false,
+    dmFeedback: settings.dmFeedback !== false,
+    ticketRatingsEnabled: settings.ticketRatingsEnabled !== false,
+    ticketPriorityEnabled: settings.ticketPriorityEnabled === true,
+    ticketPriorities: Array.isArray(settings.ticketPriorities) ? settings.ticketPriorities : [],
+    customCommandRole: settings.customCommandRole || null,
+    inviteLogChannel: settings.inviteLogChannel || null,
+    nicknameLogChannel: settings.nicknameLogChannel || null,
+    bannedNickPatterns: Array.isArray(settings.bannedNickPatterns) ? settings.bannedNickPatterns : [],
     features: settings.features || {}
   };
 }
@@ -369,6 +406,56 @@ function sanitizeSettings(guildId, input) {
     updates.staffApplyQuestions = sanitizeStaffQuestions(body.staffApplyQuestions);
   }
 
+  const extraIdFields = [
+    'verificationChannel',
+    'verificationRole',
+    'verificationLogChannel',
+    'vouchLogChannel',
+    'feedbackChannel',
+    'customCommandRole',
+    'inviteLogChannel',
+    'nicknameLogChannel',
+    'maintenanceChannelId',
+    'maintenanceAnnouncementChannelId'
+  ];
+  extraIdFields.forEach(function (field) {
+    if (body[field] === undefined) return;
+    const value = cleanId(body[field]);
+    if (value === undefined) return;
+    updates[field] = value;
+  });
+
+  const booleanFields = [
+    'verificationEnabled',
+    'dmWarnings',
+    'dmSecurity',
+    'dmTicketUpdates',
+    'dmFeedback',
+    'ticketRatingsEnabled',
+    'ticketPriorityEnabled'
+  ];
+  booleanFields.forEach(function (field) {
+    if (body[field] !== undefined) updates[field] = Boolean(body[field]);
+  });
+
+  if (body.verificationRules !== undefined) updates.verificationRules = cleanText(body.verificationRules, 4000);
+  if (['button', 'dm', 'channel'].indexOf(body.verificationMode) !== -1) {
+    updates.verificationMode = body.verificationMode;
+  }
+  if (Array.isArray(body.verificationRoles)) updates.verificationRoles = cleanIdList(body.verificationRoles, 10);
+  if (Array.isArray(body.maintenanceAllowedRoles)) updates.maintenanceAllowedRoles = cleanIdList(body.maintenanceAllowedRoles, 10);
+  if (Array.isArray(body.ticketPriorities)) {
+    updates.ticketPriorities = body.ticketPriorities.map(function (p) {
+      return String(p || '').trim().slice(0, 20);
+    }).filter(Boolean).slice(0, 8);
+  }
+  if (Array.isArray(body.bannedNickPatterns)) {
+    updates.bannedNickPatterns = body.bannedNickPatterns.map(function (p) {
+      return String(p || '').trim().slice(0, 120);
+    }).filter(Boolean).slice(0, 20);
+  }
+  if (body.maintenanceMessage !== undefined) updates.maintenanceMessage = cleanText(body.maintenanceMessage, 2000);
+
   if (body.features && typeof body.features === 'object') {
     const features = Object.assign({}, current.features || {});
     Object.keys(body.features).forEach(function (key) {
@@ -486,6 +573,22 @@ function activityPayload(guildId) {
     };
   });
 
+  const vouches = vouch.getVouches(guildId).slice().sort(function (a, b) {
+    return (b.createdAt || 0) - (a.createdAt || 0);
+  });
+  const vouchLeaderboard = vouch.getVouchLeaderboard(guildId, 10);
+  const ratings = Array.isArray(db.data.ticketRatings[guildId]) ? db.data.ticketRatings[guildId] : [];
+  const ratingAverage = ratings.length
+    ? Math.round((ratings.reduce(function (sum, r) { return sum + (r.stars || 0); }, 0) / ratings.length) * 10) / 10
+    : 0;
+  const staffMetrics = staffTracker.getAllStaffMetrics(guildId);
+  const staffLeaderboard = staffTracker.getStaffLeaderboard(guildId, 10);
+  const staffAdviceExtended = staffTracker.generateAdvice(guildId);
+  const commands = customCommands.getCustomCommands(guildId);
+  const rolePanels = reactionRoles.getReactionRoles(guildId);
+  const ratingsEnabled = db.getGuild(guildId).ticketRatingsEnabled !== false;
+  const priorityEnabled = db.getGuild(guildId).ticketPriorityEnabled === true;
+
   return {
     tickets: tickets.slice(0, 25),
     staffApplications: applications.slice(0, 25),
@@ -493,7 +596,29 @@ function activityPayload(guildId) {
     ticketStats: ticketStats,
     staffStats: staffStats,
     appealStats: appealStats,
-    staffAdvice: advice
+    staffAdvice: advice,
+    vouches: vouches.slice(0, 25),
+    vouchStats: {
+      total: vouches.length,
+      average: vouches.length
+        ? Math.round((vouches.reduce(function (sum, v) { return sum + (v.stars || 0); }, 0) / vouches.length) * 10) / 10
+        : 0,
+      leaderboard: vouchLeaderboard
+    },
+    ticketRatings: {
+      total: ratings.length,
+      average: ratingAverage,
+      recent: ratings.slice(-20).reverse(),
+      enabled: ratingsEnabled,
+      priorityEnabled: priorityEnabled
+    },
+    staffMetrics: staffMetrics,
+    staffLeaderboard: staffLeaderboard,
+    staffAdviceExtended: staffAdviceExtended,
+    customCommands: commands,
+    reactionRoles: rolePanels,
+    inviteLeaderboard: enhancedInvites.getInviteLeaderboard(guildId, 'total', 10),
+    maintenanceMode: db.getGuild(guildId).maintenanceMode === true
   };
 }
 
@@ -716,6 +841,316 @@ async function handle(req, res) {
     } catch (err) {
       return json(res, 400, { ok: false, error: err.message });
     }
+  }
+
+  const customCommandMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/custom-commands(?:\/([A-Za-z0-9]+))?$/);
+  if (customCommandMatch) {
+    const guildId = customCommandMatch[1];
+    const commandId = customCommandMatch[2] || null;
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET' && !commandId) {
+      return json(res, 200, { ok: true, commands: customCommands.getCustomCommands(guildId) });
+    }
+
+    let body = {};
+    if (req.method !== 'GET' && req.method !== 'DELETE') {
+      try {
+        body = await readBody(req);
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+    }
+
+    if (req.method === 'POST' && !commandId) {
+      const name = String(body.name || '').toLowerCase().replace(/[^a-z0-9-_]/g, '').slice(0, 32);
+      if (!name) return json(res, 400, { ok: false, error: 'A command name is required.' });
+      if (customCommands.getCustomCommand(guildId, name)) {
+        return json(res, 400, { ok: false, error: 'A custom command with that name already exists.' });
+      }
+      const response = String(body.response || '').slice(0, 2000);
+      if (!response && (!body.embed || !body.embed.description)) {
+        return json(res, 400, { ok: false, error: 'A response or embed description is required.' });
+      }
+      const created = customCommands.addCustomCommand(guildId, {
+        name: name,
+        response: response,
+        type: body.type === 'embed' ? 'embed' : 'text',
+        embed: body.embed || null,
+        cooldown: body.cooldown,
+        allowedRoles: body.allowedRoles,
+        allowedChannels: body.allowedChannels,
+        createdBy: body.createdBy || null
+      });
+      return json(res, 200, { ok: true, command: created });
+    }
+
+    if (req.method === 'PATCH' && commandId) {
+      const updates = {};
+      if (body.response !== undefined) updates.response = String(body.response || '').slice(0, 2000);
+      if (body.type !== undefined) updates.type = body.type === 'embed' ? 'embed' : 'text';
+      if (body.embed !== undefined) updates.embed = body.embed || null;
+      if (body.cooldown !== undefined) updates.cooldown = Math.max(0, parseInt(body.cooldown, 10) || 0);
+      if (Array.isArray(body.allowedRoles)) updates.allowedRoles = cleanIdList(body.allowedRoles, 10);
+      if (Array.isArray(body.allowedChannels)) updates.allowedChannels = cleanIdList(body.allowedChannels, 10);
+      const updated = customCommands.updateCustomCommand(guildId, commandId, updates);
+      if (!updated) return json(res, 404, { ok: false, error: 'Command not found.' });
+      return json(res, 200, { ok: true, command: updated });
+    }
+
+    if (req.method === 'DELETE' && commandId) {
+      const deleted = customCommands.deleteCustomCommand(guildId, commandId);
+      if (!deleted) return json(res, 404, { ok: false, error: 'Command not found.' });
+      return json(res, 200, { ok: true });
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
+  }
+
+  const reactionRolePublishMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/reaction-roles\/([A-Za-z0-9]+)\/publish$/);
+  if (reactionRolePublishMatch) {
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guildId = reactionRolePublishMatch[1];
+    const panelId = reactionRolePublishMatch[2];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    const panel = reactionRoles.getReactionRole(guildId, panelId);
+    if (!panel) return json(res, 404, { ok: false, error: 'Role panel not found.' });
+    const channel = guild.channels.cache.get(panel.channelId);
+    if (!channel) return json(res, 404, { ok: false, error: 'Panel channel not found.' });
+    const message = await reactionRoles.sendReactionRolePanel(channel, panel, guild);
+    return json(res, 200, { ok: true, messageId: message ? message.id : null });
+  }
+
+  const reactionRoleMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/reaction-roles(?:\/([A-Za-z0-9]+))?$/);
+  if (reactionRoleMatch) {
+    const guildId = reactionRoleMatch[1];
+    const panelId = reactionRoleMatch[2] || null;
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET' && !panelId) {
+      return json(res, 200, { ok: true, panels: reactionRoles.getReactionRoles(guildId) });
+    }
+
+    let body = {};
+    if (req.method === 'POST') {
+      try {
+        body = await readBody(req);
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+    }
+
+    if (req.method === 'POST' && !panelId) {
+      const channelId = cleanId(body.channelId);
+      const roleId = cleanId(body.roleId);
+      if (!channelId || !roleId) return json(res, 400, { ok: false, error: 'Channel and role are required.' });
+      const created = reactionRoles.addReactionRole(guildId, {
+        channelId: channelId,
+        roleId: roleId,
+        type: body.type === 'dropdown' ? 'dropdown' : 'button',
+        label: String(body.label || '').slice(0, 80) || null,
+        emoji: String(body.emoji || '').slice(0, 64) || null,
+        description: String(body.description || '').slice(0, 500) || null,
+        maxRoles: Math.max(0, parseInt(body.maxRoles, 10) || 0),
+        createdBy: body.createdBy || null
+      });
+      let message = null;
+      const channel = guild.channels.cache.get(channelId);
+      if (channel) message = await reactionRoles.sendReactionRolePanel(channel, created, guild);
+      return json(res, 200, { ok: true, panel: created, messageId: message ? message.id : null });
+    }
+
+    if (req.method === 'DELETE' && panelId) {
+      const deleted = reactionRoles.deleteReactionRole(guildId, panelId);
+      if (!deleted) return json(res, 404, { ok: false, error: 'Role panel not found.' });
+      return json(res, 200, { ok: true });
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
+  }
+
+  const verificationMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/verification$/);
+  if (verificationMatch) {
+    const guildId = verificationMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET') {
+      const settings = db.getGuild(guildId);
+      return json(res, 200, {
+        ok: true,
+        verification: {
+          enabled: settings.verificationEnabled === true,
+          channelId: settings.verificationChannel || null,
+          roleId: settings.verificationRole || null,
+          rules: settings.verificationRules || null,
+          mode: settings.verificationMode || 'button'
+        }
+      });
+    }
+
+    if (req.method === 'POST') {
+      let body = {};
+      try {
+        body = await readBody(req);
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+      const channelId = cleanId(body.channelId);
+      const roleId = cleanId(body.roleId);
+      const rules = String(body.rules || '').slice(0, 4000);
+      if (!channelId || !roleId || !rules) {
+        return json(res, 400, { ok: false, error: 'Channel, role and rules are required.' });
+      }
+      await verification.setupVerification(
+        guild,
+        db.getGuild(guildId),
+        channelId,
+        roleId,
+        rules,
+        cleanId(body.logChannelId) || null,
+        Array.isArray(body.questions) ? body.questions : []
+      );
+      db.updateGuild(guildId, {
+        verificationMode: ['button', 'dm', 'channel'].indexOf(body.mode) !== -1 ? body.mode : 'button',
+        verificationEnabled: body.enabled !== false
+      });
+      return json(res, 200, { ok: true });
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
+  }
+
+  const maintenanceMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/maintenance$/);
+  if (maintenanceMatch) {
+    const guildId = maintenanceMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET') {
+      const settings = db.getGuild(guildId);
+      return json(res, 200, {
+        ok: true,
+        maintenance: {
+          enabled: settings.maintenanceMode === true,
+          message: settings.maintenanceMessage,
+          channelId: settings.maintenanceChannelId,
+          announcementChannelId: settings.maintenanceAnnouncementChannelId
+        }
+      });
+    }
+
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+
+    let body = {};
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+
+    const settings = db.getGuild(guildId);
+    if (body.enabled === true) {
+      if (settings.maintenanceMode) return json(res, 400, { ok: false, error: 'Maintenance mode is already active.' });
+      const result = await maintenance.enableMaintenanceMode(guild, settings, body.startedBy || null, {
+        message: body.message || settings.maintenanceMessage,
+        allowedRoles: cleanIdList(body.allowedRoles || [], 10)
+      });
+      return json(res, 200, { ok: true, result: {
+        channelId: result.maintenanceChannel ? result.maintenanceChannel.id : null,
+        announcementChannelId: result.announcementChannel ? result.announcementChannel.id : null
+      } });
+    }
+
+    if (body.enabled === false) {
+      await maintenance.disableMaintenanceMode(guild, settings);
+      return json(res, 200, { ok: true });
+    }
+
+    if (body.announce) {
+      await maintenance.sendMaintenanceAnnouncement(guild, settings, String(body.announce).slice(0, 2000), body.authorId || null);
+      return json(res, 200, { ok: true });
+    }
+
+    return json(res, 400, { ok: false, error: 'Provide enabled: true/false or an announcement.' });
+  }
+
+  const purgeMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/purge$/);
+  if (purgeMatch) {
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guildId = purgeMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    let body = {};
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+    const channel = guild.channels.cache.get(cleanId(body.channelId) || '');
+    if (!channel) return json(res, 404, { ok: false, error: 'Channel not found.' });
+    const result = await advancedPurge.advancedPurge(channel, body.options || {}, body.executor || { id: 'dashboard', tag: 'Dashboard' });
+    if (result.logEmbed) {
+      const settings = db.getGuild(guildId);
+      const logChannel = guild.channels.cache.get(settings.logChannel || '');
+      if (logChannel) logChannel.send({ embeds: [result.logEmbed] }).catch(function () {});
+    }
+    return json(res, 200, { ok: true, deleted: result.deleted, filtered: result.filtered });
+  }
+
+  const nicknameMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/nickname$/);
+  if (nicknameMatch) {
+    if (req.method !== 'POST') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guildId = nicknameMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    let body = {};
+    try {
+      body = await readBody(req);
+    } catch (err) {
+      return json(res, 400, { ok: false, error: err.message });
+    }
+    const member = await guild.members.fetch(cleanId(body.userId) || '').catch(function () { return null; });
+    if (!member) return json(res, 404, { ok: false, error: 'Member not found.' });
+    const result = body.reset
+      ? await nicknameUtil.resetNickname(member, 'Dashboard reset', body.executorId || null)
+      : await nicknameUtil.setNickname(member, body.nickname || '', 'Dashboard change', body.executorId || null);
+    if (!result.success) return json(res, 400, { ok: false, error: result.reason });
+    return json(res, 200, { ok: true, result: result });
+  }
+
+  const channelListMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/channels$/);
+  if (channelListMatch) {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guild = botClient.guilds.cache.get(channelListMatch[1]);
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    const channels = guild.channels.cache
+      .filter(function (c) { return [0, 2, 4, 5].indexOf(c.type) !== -1; })
+      .map(function (c) { return { id: c.id, name: c.name, type: c.type, parentId: c.parentId || null }; })
+      .sort(function (a, b) { return a.name.localeCompare(b.name); });
+    return json(res, 200, { ok: true, channels: channels });
+  }
+
+  const roleListMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/roles$/);
+  if (roleListMatch) {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guild = botClient.guilds.cache.get(roleListMatch[1]);
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    const roles = guild.roles.cache
+      .filter(function (r) { return r.id !== guild.id && !r.managed; })
+      .map(function (r) { return { id: r.id, name: r.name, color: r.hexColor, position: r.position }; })
+      .sort(function (a, b) { return b.position - a.position; });
+    return json(res, 200, { ok: true, roles: roles });
   }
 
   const match = pathname.match(/^\/api\/guilds\/(\d{5,25})\/settings$/);
