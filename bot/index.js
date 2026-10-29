@@ -884,7 +884,7 @@ client.on('messageCreate', async function (message) {
 
     const custom = customCommands.getCustomCommand(message.guild.id, commandName);
     if (!custom) return;
-    if (!customCommands.canUseCommand(message.member, custom)) {
+    if (!customCommands.canUseCommand(message.member, custom, message.channel.id)) {
       return message.reply({
         embeds: [ZyronEmbedBuilder.error('Custom Command', 'You do not have access to this command.')]
       }).catch(function () {});

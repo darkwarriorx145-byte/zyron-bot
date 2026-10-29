@@ -142,7 +142,8 @@ async function handleVouchSubmit(interaction) {
     .setFooter({ text: config.botName + ' | Powered by ' + config.company })
     .setTimestamp();
 
-  const logId = db.getGuild(interaction.guild.id).vouchLogChannel;
+  const settings = db.getGuild(interaction.guild.id);
+  const logId = settings.vouchLogChannel || settings.logChannel;
   const logChannel = logId ? interaction.guild.channels.cache.get(logId) : null;
   if (logChannel) {
     const publicEmbed = new EmbedBuilder()

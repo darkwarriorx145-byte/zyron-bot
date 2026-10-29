@@ -55,9 +55,12 @@ function deleteCustomCommand(guildId, id) {
   return true;
 }
 
-function canUseCommand(member, cmd) {
+function canUseCommand(member, cmd, channelId) {
   if (cmd.allowedRoles.length > 0 && !member.roles.cache.some(r => cmd.allowedRoles.includes(r.id))) return false;
-  if (cmd.allowedChannels.length > 0 && !cmd.allowedChannels.includes(member.channel?.id)) return false;
+  if (cmd.allowedChannels.length > 0) {
+    const current = channelId || (member && member.channel ? member.channel.id : null);
+    if (!current || !cmd.allowedChannels.includes(current)) return false;
+  }
   return true;
 }
 
@@ -84,7 +87,7 @@ async function executeCustomCommand(message, cmd) {
     const key = 'ccmd:' + message.guild.id + ':' + message.author.id + ':' + cmd.id;
     // Simple in-memory cooldown (could persist to DB)
     if (global.customCmdCooldowns && global.customCmdCooldowns.has(key)) {
-      return message.reply({ content: 'This command is on cooldown.', ephemeral: true }).catch(() => {});
+      return message.reply({ content: 'This command is on cooldown.' }).catch(() => {});
     }
     if (!global.customCmdCooldowns) global.customCmdCooldowns = new Map();
     global.customCmdCooldowns.set(key, true);
