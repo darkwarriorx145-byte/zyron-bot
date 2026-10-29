@@ -1480,7 +1480,7 @@
                 <div class="empty-inline">No XP recorded yet.</div>
               <% } else { %>
                 <% levelRows.forEach(function (entry, index) { %>
-                  <div class="data-row"><span><strong>#<%= index + 1 %> <span class="muted">ID</span> <%= entry.userId %></strong><small>Level <%= entry.level %> &middot; <%= entry.totalXp %> XP &middot; <%= entry.messages %> messages</small></span></div>
+                  <div class="data-row"><span><strong>#<%= index + 1 %> <%= entry.username || entry.userId %></strong><small>Level <%= entry.level %> &middot; <%= entry.totalXp %> XP &middot; <%= entry.messages %> messages</small></span></div>
                 <% }); %>
               <% } %>
             </div>

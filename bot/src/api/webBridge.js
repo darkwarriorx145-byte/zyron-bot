@@ -151,7 +151,7 @@ function summarizeSettings(settings) {
     ticketPanelDescription: settings.ticketPanelDescription || null,
     ticketPanelFooter: settings.ticketPanelFooter || null,
     ticketCreateLabel: settings.ticketCreateLabel || 'Create Ticket',
-    ticketCreateEmoji: settings.ticketCreateEmoji || '🎫',
+    ticketCreateEmoji: settings.ticketCreateEmoji || 'ðŸŽ«',
     ticketButtons: Array.isArray(settings.ticketButtons) ? settings.ticketButtons : [],
     applicationChannel: settings.applicationChannel || null,
     staffApplyAcceptRole: settings.staffApplyAcceptRole || null,
@@ -162,7 +162,7 @@ function summarizeSettings(settings) {
     staffApplyPanelDescription: settings.staffApplyPanelDescription || null,
     staffApplyPanelFooter: settings.staffApplyPanelFooter || null,
     staffApplyButtonLabel: settings.staffApplyButtonLabel || 'Apply Now',
-    staffApplyButtonEmoji: settings.staffApplyButtonEmoji || '📝',
+    staffApplyButtonEmoji: settings.staffApplyButtonEmoji || 'ðŸ“',
     staffApplyModalTitle: settings.staffApplyModalTitle || 'Staff Application',
     staffApplyAcceptMessage: settings.staffApplyAcceptMessage || null,
     staffApplyDenyMessage: settings.staffApplyDenyMessage || null,
@@ -276,7 +276,7 @@ function sanitizeTicketButtons(list) {
     const style = ['primary', 'secondary', 'success', 'danger'].indexOf(button.style) !== -1 ? button.style : 'secondary';
     buttons.push({
       label: label,
-      emoji: cleanText(button.emoji, 64) || '🎫',
+      emoji: cleanText(button.emoji, 64) || 'ðŸŽ«',
       message: cleanText(button.message, 200) || 'Support request',
       style: style
     });
@@ -698,7 +698,17 @@ function activityPayload(guildId) {
     reactionRoles: rolePanels,
     inviteLeaderboard: enhancedInvites.getInviteLeaderboard(guildId, 'total', 10),
     maintenanceMode: db.getGuild(guildId).maintenanceMode === true,
-    levelsLeaderboard: levels.getLeaderboard(guildId, 10),
+    levelsLeaderboard: levels.getLeaderboard(guildId, 10).map(function (entry) {
+      const leaderGuild = botClient && botClient.guilds && botClient.guilds.cache
+        ? botClient.guilds.cache.get(guildId)
+        : null;
+      const leaderMember = leaderGuild && leaderGuild.members && leaderGuild.members.cache
+        ? leaderGuild.members.cache.get(entry.userId)
+        : null;
+      return Object.assign({}, entry, {
+        username: leaderMember ? leaderMember.user.tag : null
+      });
+    }),
     shopItems: shop.getItems(guildId),
     purchases: (db.data.purchases[guildId] || []).slice(-25).reverse(),
     healthReport: db.getGuild(guildId).serverAuditReport || null,
