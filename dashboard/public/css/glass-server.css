@@ -300,3 +300,8 @@
   .data-row { flex-direction: column; align-items: stretch; }
   .data-row .row-actions { justify-content: flex-start; }
 }
+
+/* Keep the longer server navigation usable on short screens */
+.server-sidebar { overflow-y: auto; scrollbar-width: thin; }
+.server-sidebar .nav { flex: 0 0 auto; }
+.server-sidebar .nav-item { min-height: 38px; }
