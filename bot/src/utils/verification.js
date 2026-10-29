@@ -1,6 +1,7 @@
 const { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const db = require('../database/db');
 const config = require('../../config.json');
+const inviteLogger = require('./inviteLogger');
 
 async function sendVerificationDM(member, settings) {
   if (!settings.verificationEnabled || !settings.verificationRules) return false;
@@ -57,6 +58,14 @@ async function handleVerificationAccept(interaction) {
       return interaction.reply({ content: 'I cannot assign the verification role. Move my role above it.', ephemeral: true });
     }
     await member.roles.add(editable, 'Verified via rules acceptance');
+
+    let inviteResult = null;
+    try {
+      inviteResult = await inviteLogger.countVerifiedInvite(guild, member, settings);
+    } catch (err) {
+      console.error('Verified invite count failed for ' + member.id + ':', err.message);
+    }
+
     await interaction.update({
       embeds: [new EmbedBuilder()
         .setColor(config.colors.success)
@@ -73,7 +82,12 @@ async function handleVerificationAccept(interaction) {
         embeds: [new EmbedBuilder()
           .setColor(config.colors.primary)
           .setTitle('Member Verified')
-          .setDescription('<@' + member.id + '> accepted the rules and was verified.')
+          .setDescription(
+            '<@' + member.id + '> accepted the rules and was verified.' +
+            (inviteResult && inviteResult.counted
+              ? '\n**Invite counted for:** <@' + inviteResult.inviter + '>'
+              : (inviteResult && inviteResult.alreadyCounted ? '\n**Invite:** Already counted.' : ''))
+          )
           .setTimestamp()]
       }).catch(function () {});
     }

@@ -75,6 +75,66 @@ function getInviteRecord(guildId, memberId) {
   return db.data.inviteMembers[guildId][memberId] || null;
 }
 
+function isInviteCounted(record) {
+  if (!record) return false;
+  if (record.counted === true) return true;
+  // Records created before verified-invite tracking were counted on join.
+  return record.counted === undefined && record.verified === undefined;
+}
+
+async function countVerifiedInvite(guild, member, settings) {
+  const record = getInviteRecord(guild.id, member.id);
+  if (!record || !record.inviter) return null;
+
+  const alreadyCounted = isInviteCounted(record);
+
+  if (!record.verified) {
+    record.verified = true;
+    record.verifiedAt = Date.now();
+    setInviteRecord(guild.id, member.id, record);
+  }
+
+  if (alreadyCounted) {
+    return { counted: false, alreadyCounted: true, inviter: record.inviter };
+  }
+
+  const isFake = record.isFake === true;
+  const inviterId = record.inviter;
+
+  addInvite(guild.id, inviterId, 'total', 1);
+  addInvite(guild.id, inviterId, isFake ? 'fake' : 'real', 1);
+
+  const reward = Number(settings.economyInvite) > 0 ? Number(settings.economyInvite) : 0;
+  if (!isFake && reward > 0) {
+    db.addCoins(guild.id, inviterId, reward);
+  }
+
+  record.counted = true;
+  record.countedAt = Date.now();
+  setInviteRecord(guild.id, member.id, record);
+
+  const logId = settings.inviteLogChannel || settings.logChannel;
+  const logChannel = logId ? guild.channels.cache.get(logId) : null;
+  if (logChannel) {
+    logChannel.send({
+      embeds: [new EmbedBuilder()
+        .setColor(config.colors.success)
+        .setTitle('✅ Invite Counted')
+        .setDescription(
+          '**Member:** ' + member.user.tag + ' (<@' + member.id + '>)\n' +
+          '**Inviter:** <@' + inviterId + '>\n' +
+          '**Invite:** ' + (record.code || 'unknown') + '\n' +
+          '**Type:** ' + (isFake ? 'Fake (new account)' : 'Real') + '\n' +
+          '**Reward:** ' + (isFake ? 'No coins (fake account)' : (reward > 0 ? reward + ' coins' : 'Disabled')) + '\n' +
+          '**Counted after verification.**'
+        )
+        .setTimestamp()]
+    }).catch(function () {});
+  }
+
+  return { counted: true, inviter: inviterId, isFake: isFake, reward: reward, code: record.code || null };
+}
+
 function resetInvites(guildId, userId = null) {
   if (userId) {
     db.data.invites[guildId][userId] = { total: 0, real: 0, fake: 0, left: 0, rejoined: 0, bonus: 0, codes: {} };
@@ -134,6 +194,8 @@ module.exports = {
   getInviteCodeLeaderboard,
   setInviteRecord,
   getInviteRecord,
+  isInviteCounted,
+  countVerifiedInvite,
   resetInvites,
   sendInviteLog,
   sendInviteLeaderboardDM

@@ -338,6 +338,7 @@ class Database {
     if (!Array.isArray(guild.maintenanceAllowedRoles)) guild.maintenanceAllowedRoles = [];
     if (guild.maintenanceStartedAt === undefined) guild.maintenanceStartedAt = null;
     if (guild.maintenanceStartedBy === undefined) guild.maintenanceStartedBy = null;
+    if (!guild.maintenanceOverwritesBackup || typeof guild.maintenanceOverwritesBackup !== 'object') guild.maintenanceOverwritesBackup = {};
     if (guild.vouchLogChannel === undefined) guild.vouchLogChannel = null;
     if (guild.feedbackChannel === undefined) guild.feedbackChannel = null;
     if (guild.dmWarnings === undefined) guild.dmWarnings = true;

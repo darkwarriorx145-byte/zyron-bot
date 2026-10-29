@@ -1649,13 +1649,21 @@ async function trackInviteJoin(member) {
     client.inviteCache.set(guild.id, map);
   }
 
+  const verificationRequired = settings.verificationEnabled === true;
+
   if (previous) {
-    db.addInvite(guild.id, previous.inviter, 'rejoin', 1);
-    db.setInviteRecord(guild.id, member.id, {
-      inviter: previous.inviter,
+    const wasCounted = inviteLogger.isInviteCounted(previous);
+
+    if (wasCounted) {
+      db.addInvite(guild.id, previous.inviter, 'rejoin', 1);
+    }
+
+    db.setInviteRecord(guild.id, member.id, Object.assign({}, previous, {
       joinedAt: Date.now(),
-      rejoined: true
-    });
+      rejoined: true,
+      verified: wasCounted ? true : previous.verified === true,
+      counted: wasCounted
+    }));
 
     if (settings.inviteLogChannel) {
       const channel = guild.channels.cache.get(settings.inviteLogChannel);
@@ -1663,8 +1671,9 @@ async function trackInviteJoin(member) {
         channel.send({
           embeds: [
             ZyronEmbedBuilder.base({
-              title: '📨 Member Rejoined',
-              description: member.user.tag + ' rejoined **' + guild.name + '**.\n**Original inviter:** <@' + previous.inviter + '>'
+              title: wasCounted ? '📨 Member Rejoined' : '⏳ Member Rejoined (Pending Verification)',
+              description: member.user.tag + ' rejoined **' + guild.name + '**.\n**Original inviter:** <@' + previous.inviter + '>' +
+                (wasCounted ? '' : '\n**Invite:** Not counted until the member verifies.')
             })
           ]
         }).catch(function () {});
@@ -1679,12 +1688,51 @@ async function trackInviteJoin(member) {
   const inviterId = used.inviter.id;
   const isFake = Date.now() - member.user.createdTimestamp < 7 * 24 * 60 * 60 * 1000;
 
+  if (verificationRequired) {
+    db.setInviteRecord(guild.id, member.id, {
+      inviter: inviterId,
+      code: used.code,
+      joinedAt: Date.now(),
+      rejoined: false,
+      isFake: isFake,
+      verified: false,
+      counted: false,
+      pendingVerification: true
+    });
+
+    if (settings.inviteLogChannel) {
+      const channel = guild.channels.cache.get(settings.inviteLogChannel);
+      if (channel) {
+        channel.send({
+          embeds: [
+            ZyronEmbedBuilder.base({
+              title: '⏳ Invite Pending Verification',
+              description:
+                member.user.tag + ' joined **' + guild.name + '**.\n' +
+                '**Inviter:** <@' + inviterId + '>\n' +
+                '**Invite:** ' + used.code + '\n' +
+                '**Type:** ' + (isFake ? 'Fake (new account)' : 'Real') + '\n' +
+                '**Status:** The invite will only count after this member verifies.'
+            })
+          ]
+        }).catch(function () {});
+      }
+    }
+
+    return;
+  }
+
   db.addInvite(guild.id, inviterId, 'total', 1);
   db.addInvite(guild.id, inviterId, isFake ? 'fake' : 'real', 1);
   db.setInviteRecord(guild.id, member.id, {
     inviter: inviterId,
+    code: used.code,
     joinedAt: Date.now(),
-    rejoined: false
+    rejoined: false,
+    isFake: isFake,
+    verified: true,
+    counted: true,
+    countedAt: Date.now()
   });
 
   const inviteReward = Number(settings.economyInvite) > 0 ? Number(settings.economyInvite) : 0;
@@ -1721,6 +1769,7 @@ client.on('guildMemberAdd', function (member) {
 client.on('guildMemberRemove', function (member) {
   const record = db.getInviteRecord(member.guild.id, member.id);
   if (!record || !record.inviter) return;
+  if (!inviteLogger.isInviteCounted(record)) return;
   db.addInvite(member.guild.id, record.inviter, 'left', 1);
 });
 

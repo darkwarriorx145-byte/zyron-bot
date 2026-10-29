@@ -92,9 +92,9 @@ const CATEGORIES = [
     value: 'utility',
     label: 'Utility',
     emoji: ZyronEmbedBuilder.emoji('settings'),
-    description: 'Purge, lock, unlock, autorole and profile.',
+    description: 'Purge, lock, unlock, autorole, nickname and maintenance mode.',
     blurb: 'Everyday tools to keep channels clean and roles automatic.',
-    commands: ['purge', 'lock', 'unlock', 'autorole', 'invites', 'profile']
+    commands: ['purge', 'lock', 'unlock', 'autorole', 'nickname', 'invites', 'maintenance', 'profile']
   },
   {
     value: 'information',
