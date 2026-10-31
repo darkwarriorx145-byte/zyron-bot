@@ -93,6 +93,32 @@ const DASHBOARD_KEYS = [
   'serverAuditChannelId',
   'serverAuditLastAt',
   'serverAuditReport',
+  'joinGateEnabled',
+  'joinGateChallengeEnabled',
+  'joinGateQuarantineRoleId',
+  'joinGateRiskThreshold',
+  'joinGateMinAccountAgeDays',
+  'joinGateHighRiskAction',
+  'joinGateHoneypotChannelId',
+  'joinGateHoneypotAction',
+  'joinGateLogChannelId',
+  'joinGateChallengeChannelId',
+  'questsEnabled',
+  'questDailyMessages',
+  'questDailyVoice',
+  'questDailyCoins',
+  'questWeeklyMessages',
+  'questWeeklyVoice',
+  'questWeeklyPurchases',
+  'questWeeklyCoins',
+  'progressionLogChannelId',
+  'staffOpsEnabled',
+  'staffLogChannelId',
+  'staffAdviceChannelId',
+  'staffPromotionThreshold',
+  'staffInactiveDays',
+  'staffReviewIntervalHours',
+  'staffOpsLastReviewAt',
   'features'
 ];
 
@@ -153,7 +179,10 @@ class Database {
       purchases: {},
       tempActions: {},
       schedules: {},
-      integrations: {}
+      integrations: {},
+      joinGateEvents: {},
+      joinGateChallenges: {},
+      progression: {}
     };
     this.messageBuffer = 0;
     this.lastSyncMtime = 0;
@@ -204,6 +233,9 @@ class Database {
         this.data.tempActions = parsed.tempActions || {};
         this.data.schedules = parsed.schedules || {};
         this.data.integrations = parsed.integrations || {};
+        this.data.joinGateEvents = parsed.joinGateEvents || {};
+        this.data.joinGateChallenges = parsed.joinGateChallenges || {};
+        this.data.progression = parsed.progression || {};
       } catch (err) {
         console.error('Database load failed, starting fresh:', err.message);
       }
@@ -326,6 +358,32 @@ class Database {
         serverAuditChannelId: null,
         serverAuditLastAt: null,
         serverAuditReport: null,
+        joinGateEnabled: false,
+        joinGateChallengeEnabled: true,
+        joinGateQuarantineRoleId: null,
+        joinGateRiskThreshold: 60,
+        joinGateMinAccountAgeDays: 7,
+        joinGateHighRiskAction: 'quarantine',
+        joinGateHoneypotChannelId: null,
+        joinGateHoneypotAction: 'timeout',
+        joinGateLogChannelId: null,
+        joinGateChallengeChannelId: null,
+        questsEnabled: false,
+        questDailyMessages: 50,
+        questDailyVoice: 30,
+        questDailyCoins: 50,
+        questWeeklyMessages: 250,
+        questWeeklyVoice: 180,
+        questWeeklyPurchases: 3,
+        questWeeklyCoins: 250,
+        progressionLogChannelId: null,
+        staffOpsEnabled: true,
+        staffLogChannelId: null,
+        staffAdviceChannelId: null,
+        staffPromotionThreshold: 200,
+        staffInactiveDays: 14,
+        staffReviewIntervalHours: 24,
+        staffOpsLastReviewAt: null,
         features: defaults()
       };
       this.save();
@@ -419,6 +477,32 @@ class Database {
     if (guild.serverAuditChannelId === undefined) guild.serverAuditChannelId = null;
     if (guild.serverAuditLastAt === undefined) guild.serverAuditLastAt = null;
     if (guild.serverAuditReport === undefined) guild.serverAuditReport = null;
+    if (guild.joinGateEnabled === undefined) guild.joinGateEnabled = false;
+    if (guild.joinGateChallengeEnabled === undefined) guild.joinGateChallengeEnabled = true;
+    if (guild.joinGateQuarantineRoleId === undefined) guild.joinGateQuarantineRoleId = null;
+    if (guild.joinGateRiskThreshold === undefined) guild.joinGateRiskThreshold = 60;
+    if (guild.joinGateMinAccountAgeDays === undefined) guild.joinGateMinAccountAgeDays = 7;
+    if (!guild.joinGateHighRiskAction) guild.joinGateHighRiskAction = 'quarantine';
+    if (guild.joinGateHoneypotChannelId === undefined) guild.joinGateHoneypotChannelId = null;
+    if (!guild.joinGateHoneypotAction) guild.joinGateHoneypotAction = 'timeout';
+    if (guild.joinGateLogChannelId === undefined) guild.joinGateLogChannelId = null;
+    if (guild.joinGateChallengeChannelId === undefined) guild.joinGateChallengeChannelId = null;
+    if (guild.questsEnabled === undefined) guild.questsEnabled = false;
+    if (guild.questDailyMessages === undefined) guild.questDailyMessages = 50;
+    if (guild.questDailyVoice === undefined) guild.questDailyVoice = 30;
+    if (guild.questDailyCoins === undefined) guild.questDailyCoins = 50;
+    if (guild.questWeeklyMessages === undefined) guild.questWeeklyMessages = 250;
+    if (guild.questWeeklyVoice === undefined) guild.questWeeklyVoice = 180;
+    if (guild.questWeeklyPurchases === undefined) guild.questWeeklyPurchases = 3;
+    if (guild.questWeeklyCoins === undefined) guild.questWeeklyCoins = 250;
+    if (guild.progressionLogChannelId === undefined) guild.progressionLogChannelId = null;
+    if (guild.staffOpsEnabled === undefined) guild.staffOpsEnabled = true;
+    if (guild.staffLogChannelId === undefined) guild.staffLogChannelId = null;
+    if (guild.staffAdviceChannelId === undefined) guild.staffAdviceChannelId = null;
+    if (guild.staffPromotionThreshold === undefined) guild.staffPromotionThreshold = 200;
+    if (guild.staffInactiveDays === undefined) guild.staffInactiveDays = 14;
+    if (guild.staffReviewIntervalHours === undefined) guild.staffReviewIntervalHours = 24;
+    if (guild.staffOpsLastReviewAt === undefined) guild.staffOpsLastReviewAt = null;
 
     const base = defaults();
     for (const key in base) {

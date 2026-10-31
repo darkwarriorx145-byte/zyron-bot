@@ -43,6 +43,8 @@ const levels = require('./src/utils/levels');
 const tempActions = require('./src/utils/tempActions');
 const scheduler = require('./src/utils/scheduler');
 const serverAudit = require('./src/utils/serverAudit');
+const joinGate = require('./src/utils/joinGate');
+const progression = require('./src/utils/progression');
 
 theme.install();
 
@@ -615,6 +617,10 @@ async function handleTicketMessage(message, settings) {
   const staff = ticketAssistant.isTicketStaff(message.member, settings);
 
   if (staff) {
+    staffTracker.trackTicketMessage(message.guild.id, message.author.id, {
+      ticket: record.number || record.id,
+      channelId: message.channel.id
+    });
     if (record.aiPaused) return;
     db.updateTicket(message.guild.id, record.id, {
       aiPaused: true,
@@ -695,6 +701,9 @@ function onReady() {
   tempActions.start(client);
   scheduler.start(client);
   serverAudit.start(client);
+  staffTracker.configure(client);
+  staffTracker.startReviewLoop(client);
+  progression.configure(client);
 
   client.guilds.cache.forEach(function (guild) {
     db.getGuild(guild.id);
@@ -772,6 +781,20 @@ client.on('messageCreate', async function (message) {
   const protectedAuthor = isProtectedUser(message.author.id);
 
   const activeTicket = db.getTicketByChannel(message.guild.id, message.channel.id);
+
+  try {
+    const honeypotTriggered = await joinGate.handleHoneypot(message, settings);
+    if (honeypotTriggered) return;
+  } catch (err) {
+    console.error('Join Gate honeypot failed:', err.message);
+  }
+
+  staffTracker.trackMessage(message.guild, message.member, settings);
+  try {
+    progression.recordActivity(message.guild.id, message.author.id, 'message', 1, client);
+  } catch (err) {
+    console.error('Progression message activity failed:', err.message);
+  }
 
   if (maintenance.isMaintenanceMode(message.guild.id) && !protectedAuthor) {
     const allowedRoles = settings.maintenanceAllowedRoles || [];
@@ -909,6 +932,8 @@ client.on('messageCreate', async function (message) {
       console.error('Custom command error:', err.message);
     });
   }
+
+  staffTracker.trackCommand(message.guild, message.member, settings);
 
   if (command.permissions && command.permissions.length > 0) {
     if (!message.member.permissions.has(command.permissions)) {
@@ -1582,6 +1607,18 @@ client.on('guildMemberAdd', async function (member) {
     return;
   }
 
+  let gateResult = null;
+  try {
+    gateResult = await joinGate.handleMemberJoin(member, settings);
+    if (gateResult && gateResult.action === 'kick') return;
+  } catch (err) {
+    console.error('Join Gate failed for ' + member.id + ':', err.message);
+  }
+
+  if (gateResult && (gateResult.challenge || gateResult.action === 'quarantine')) {
+    return;
+  }
+
   if (settings.verificationEnabled) {
     const verifyRole = settings.verificationRole ? guild.roles.cache.get(settings.verificationRole) : null;
     const alreadyVerified = verifyRole && member.roles.cache.has(verifyRole.id);
@@ -1740,6 +1777,11 @@ async function trackInviteJoin(member) {
 
   db.addInvite(guild.id, inviterId, 'total', 1);
   db.addInvite(guild.id, inviterId, isFake ? 'fake' : 'real', 1);
+  try {
+    progression.recordActivity(guild.id, inviterId, 'invite', 1, client);
+  } catch (err) {
+    console.error('Progression invite activity failed:', err.message);
+  }
   db.setInviteRecord(guild.id, member.id, {
     inviter: inviterId,
     code: used.code,
@@ -1816,6 +1858,13 @@ client.on('interactionCreate', async function (interaction) {
       if (action === 'accept') {
         return await verification.handleVerificationAccept(interaction);
       }
+      return;
+    }
+
+    if (commandName === 'joingate') {
+      const action = interaction.customId.split(':')[1];
+      if (action === 'challenge') return await joinGate.handleChallengeButton(interaction);
+      if (action === 'answer') return await joinGate.handleChallengeSubmit(interaction);
       return;
     }
 

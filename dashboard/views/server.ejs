@@ -173,6 +173,111 @@
         </div>
       </section>
 
+      <section class="panel" data-panel="profile" id="panel-profile">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Workspace</span>
+            <h2>My Profile</h2>
+            <p class="muted">Your level, coins, badges, quests and every main community stat in one place.</p>
+          </div>
+          <% if (viewerProfile) { %>
+            <span class="badge badge-success"><%= viewerProfile.badgeCount %>/<%= viewerProfile.totalBadges %> badges</span>
+          <% } else { %>
+            <span class="badge badge-muted">Profile unavailable</span>
+          <% } %>
+        </div>
+
+        <% if (!viewerProfile) { %>
+          <div class="empty-inline">Profile data is unavailable. Start the bot API and try again.</div>
+        <% } else { %>
+          <div class="profile-hero glass">
+            <span class="profile-avatar">
+              <% if (viewerProfile.avatar) { %>
+                <img src="<%= viewerProfile.avatar %>" alt="">
+              <% } else { %>
+                <%- include('partials/icon', { name: 'user', size: 30 }) %>
+              <% } %>
+            </span>
+            <span class="profile-hero-copy">
+              <small><%= viewerProfile.username || user.displayName %></small>
+              <strong>Level <%= viewerProfile.level %> · Rank #<%= viewerProfile.rank %></strong>
+              <span class="profile-xp-track"><span style="width:<%= Math.max(0, Math.min(100, viewerProfile.needed > 0 ? Math.round((viewerProfile.progress / viewerProfile.needed) * 100) : 0)) %>%"></span></span>
+              <small><%= viewerProfile.progress %>/<%= viewerProfile.needed %> XP to the next level</small>
+            </span>
+            <span class="profile-coins">
+              <small>Coin balance</small>
+              <strong><%= viewerProfile.coins %></strong>
+              <small><%= viewerProfile.coinsEarned %> earned</small>
+            </span>
+          </div>
+
+          <div class="stats-grid">
+            <div class="stat-card glass"><span>Messages</span><strong><%= viewerProfile.messages %></strong></div>
+            <div class="stat-card glass"><span>Voice minutes</span><strong><%= viewerProfile.voiceMinutes %></strong></div>
+            <div class="stat-card glass"><span>Invites</span><strong><%= viewerProfile.invites %></strong></div>
+            <div class="stat-card glass"><span>Warnings</span><strong><%= viewerProfile.warnings %></strong></div>
+            <div class="stat-card glass"><span>Quest streak</span><strong><%= viewerProfile.streak %> days</strong></div>
+            <div class="stat-card glass"><span>Quests done</span><strong><%= viewerProfile.questsCompleted %></strong></div>
+          </div>
+
+          <div class="panel-grid two-one">
+            <div class="card glass">
+              <div class="card-head">
+                <div class="card-title">
+                  <span class="card-icon"><%- include('partials/icon', { name: 'star', size: 18 }) %></span>
+                  <div>
+                    <h3>Badges</h3>
+                    <p class="muted">Unlocked by activity, levels, invites, quests and streaks.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="profile-badges">
+                <% viewerProfile.badges.forEach(function (badge) { %>
+                  <div class="profile-badge <%= badge.unlocked ? 'unlocked' : 'locked' %>">
+                    <span class="profile-badge-icon"><%= badge.emoji %></span>
+                    <span>
+                      <strong><%= badge.name %></strong>
+                      <small><%= badge.description %></small>
+                    </span>
+                    <span class="profile-badge-progress"><%= badge.progress %>%</span>
+                  </div>
+                <% }); %>
+              </div>
+            </div>
+
+            <div class="card glass">
+              <div class="card-head">
+                <div class="card-title">
+                  <span class="card-icon"><%- include('partials/icon', { name: 'activity', size: 18 }) %></span>
+                  <div>
+                    <h3>Quests</h3>
+                    <p class="muted">Daily and weekly goals. Progress is automatic.</p>
+                  </div>
+                </div>
+              </div>
+              <% if (!viewerProfile.quests || viewerProfile.quests.length === 0) { %>
+                <div class="empty-inline">Quests are not enabled yet. An admin can enable them in Progression.</div>
+              <% } else { %>
+                <div class="quest-list">
+                  <% viewerProfile.quests.forEach(function (quest) { %>
+                    <div class="quest-row">
+                      <span>
+                        <strong><%= quest.label %></strong>
+                        <small><%= quest.period === 'daily' ? 'Daily' : 'Weekly' %> · <%= quest.reward %> coins</small>
+                      </span>
+                      <span class="quest-progress">
+                        <span class="progress-track"><span style="width:<%= Math.min(100, Math.round((quest.progress / quest.goal) * 100)) %>%"></span></span>
+                        <small><%= quest.progress %>/<%= quest.goal %><%= quest.completed ? ' ✅' : '' %></small>
+                      </span>
+                    </div>
+                  <% }); %>
+                </div>
+              <% } %>
+            </div>
+          </div>
+        <% } %>
+      </section>
+
       <section class="panel" data-panel="antinuke" id="panel-antinuke">
         <div class="panel-head">
           <div>
@@ -329,6 +434,115 @@
                 <span class="switch"><input class="feature-toggle" data-feature="<%= feature.key %>" type="checkbox" <%= settings.features[feature.key] ? 'checked' : '' %>><span class="switch-track"></span></span>
               </label>
             <% }); %>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="joingate" id="panel-joingate">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Protection</span>
+            <h2>Join Gate 2.0</h2>
+            <p class="muted">Score every new account, quarantine risky joins, require a human check and catch honeypot triggers.</p>
+          </div>
+          <span class="badge <%= settings.joinGateEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.joinGateEnabled ? 'Gate active' : 'Gate off' %></span>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'shield', size: 18 }) %></span>
+                <div>
+                  <h3>Gate rules</h3>
+                  <p class="muted">The bot scores account age, avatar, username patterns, join bursts, warnings and invite quality.</p>
+                </div>
+              </div>
+            </div>
+            <div class="panel-grid two">
+              <label class="field">
+                <span>Risk threshold (0–100)</span>
+                <input class="input" id="joinGateRiskThreshold" type="number" min="0" max="100" value="<%= settings.joinGateRiskThreshold %>">
+              </label>
+              <label class="field">
+                <span>Minimum account age (days)</span>
+                <input class="input" id="joinGateMinAccountAgeDays" type="number" min="0" max="365" value="<%= settings.joinGateMinAccountAgeDays %>">
+              </label>
+              <label class="field">
+                <span>High-risk action</span>
+                <select class="input" id="joinGateHighRiskAction">
+                  <option value="quarantine" <%= settings.joinGateHighRiskAction === 'quarantine' ? 'selected' : '' %>>Quarantine + challenge</option>
+                  <option value="kick" <%= settings.joinGateHighRiskAction === 'kick' ? 'selected' : '' %>>Kick immediately</option>
+                  <option value="log" <%= settings.joinGateHighRiskAction === 'log' ? 'selected' : '' %>>Log only</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>Honeypot punishment</span>
+                <select class="input" id="joinGateHoneypotAction">
+                  <option value="timeout" <%= settings.joinGateHoneypotAction === 'timeout' ? 'selected' : '' %>>Timeout 10 minutes</option>
+                  <option value="kick" <%= settings.joinGateHoneypotAction === 'kick' ? 'selected' : '' %>>Kick</option>
+                  <option value="ban" <%= settings.joinGateHoneypotAction === 'ban' ? 'selected' : '' %>>Ban</option>
+                </select>
+              </label>
+            </div>
+            <label class="field">
+              <span>Quarantine role</span>
+              <select class="input" data-role-picker id="joinGateQuarantineRoleId" data-selected="<%= settings.joinGateQuarantineRoleId || '' %>"></select>
+              <small class="field-hint">New members keep this role until they pass the human check.</small>
+            </label>
+            <label class="field">
+              <span>Honeypot channel</span>
+              <select class="input" data-channel-picker id="joinGateHoneypotChannelId" data-selected="<%= settings.joinGateHoneypotChannelId || '' %>"></select>
+            </label>
+            <label class="field">
+              <span>Challenge fallback channel</span>
+              <select class="input" data-channel-picker id="joinGateChallengeChannelId" data-selected="<%= settings.joinGateChallengeChannelId || '' %>"></select>
+              <small class="field-hint">Used when the member has DMs closed.</small>
+            </label>
+            <label class="field">
+              <span>Join Gate log channel</span>
+              <select class="input" data-channel-picker id="joinGateLogChannelId" data-selected="<%= settings.joinGateLogChannelId || '' %>"></select>
+            </label>
+            <div class="row-actions">
+              <label class="checkbox-row"><input type="checkbox" id="joinGateEnabled" <%= settings.joinGateEnabled ? 'checked' : '' %>> Join Gate enabled</label>
+              <label class="checkbox-row"><input type="checkbox" id="joinGateChallengeEnabled" <%= settings.joinGateChallengeEnabled ? 'checked' : '' %>> Require human check</label>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'activity', size: 18 }) %></span>
+                <div>
+                  <h3>Live gate activity</h3>
+                  <p class="muted">Release or kick held accounts from here.</p>
+                </div>
+              </div>
+            </div>
+            <div class="stats-grid compact-stats">
+              <div class="stat-card glass"><span>Pending</span><strong><%= activity.joinGate.stats.pending %></strong></div>
+              <div class="stat-card glass"><span>Verified</span><strong><%= activity.joinGate.stats.verified %></strong></div>
+              <div class="stat-card glass"><span>Blocked</span><strong><%= activity.joinGate.stats.blocked %></strong></div>
+              <div class="stat-card glass"><span>Honeypot</span><strong><%= activity.joinGate.stats.honeypot %></strong></div>
+            </div>
+            <div class="data-list">
+              <% if (!activity.joinGate.events || activity.joinGate.events.length === 0) { %>
+                <div class="empty-inline">No Join Gate events yet.</div>
+              <% } else { %>
+                <% activity.joinGate.events.slice(0, 12).forEach(function (event) { %>
+                  <div class="data-row">
+                    <span>
+                      <strong>&lt;@<%= event.userId %>&gt; · risk <%= event.score %></strong>
+                      <small><%= event.type %> · <%= event.status %> · <%= event.action %></small>
+                    </span>
+                    <span class="join-gate-actions">
+                      <button type="button" class="btn btn-ghost btn-sm" data-joingate-action="release" data-joingate-event="<%= event.id %>">Release</button>
+                      <button type="button" class="btn btn-ghost btn-sm" data-joingate-action="kick" data-joingate-event="<%= event.id %>">Kick</button>
+                    </span>
+                  </div>
+                <% }); %>
+              <% } %>
+            </div>
           </div>
         </div>
       </section>
@@ -864,6 +1078,131 @@
             <% } %>
             <button type="button" class="btn btn-primary" data-publish="staff"><%- include('partials/icon', { name: 'send', size: 16 }) %> Save & publish panel</button>
             <small class="field-hint">You can still run <code>.staff-apply panel</code> in Discord at any time.</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="staffops" id="panel-staffops">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Operations</span>
+            <h2>Staff Operations</h2>
+            <p class="muted">Track staff messages, voice, commands, tickets and moderation actions. Zyron logs every action and tells admins who deserves a promotion.</p>
+          </div>
+          <span class="badge <%= settings.staffOpsEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.staffOpsEnabled ? 'Tracking live' : 'Tracking off' %></span>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card glass"><span>Tracked staff</span><strong><%= activity.staffOpsStats.tracked %></strong></div>
+          <div class="stat-card glass"><span>Active this week</span><strong><%= activity.staffOpsStats.activeThisWeek %></strong></div>
+          <div class="stat-card glass"><span>Promotion ready</span><strong><%= activity.staffOpsStats.promotionReady %></strong></div>
+          <div class="stat-card glass"><span>Logged actions</span><strong><%= (activity.staffRecentActions || []).length %></strong></div>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'users', size: 18 }) %></span>
+                <div>
+                  <h3>Staff activity</h3>
+                  <p class="muted">Messages, voice, commands, tickets and moderation in one score.</p>
+                </div>
+              </div>
+              <button type="button" class="btn btn-ghost btn-sm" data-staffops-review>Run promotion review</button>
+            </div>
+            <% if (!activity.staffLeaderboard || activity.staffLeaderboard.length === 0) { %>
+              <div class="empty-inline">No staff activity recorded yet. Activity appears after staff chat, join voice or take actions.</div>
+            <% } else { %>
+              <div class="data-list">
+                <% activity.staffLeaderboard.forEach(function (member, index) { %>
+                  <div class="data-row staff-activity-row">
+                    <span>
+                      <strong>#<%= index + 1 %> &lt;@<%= member.userId %>&gt; · <%= member.efficiencyScore || 0 %> pts</strong>
+                      <small><%= member.messages || 0 %> messages · <%= member.voiceMinutes || 0 %> voice min · <%= member.commandsUsed || 0 %> commands<br><%= member.ticketsClosed || 0 %> ticket closes · <%= member.moderationActions || 0 %> mod actions · <%= member.applicationsReviewed || 0 %> apps reviewed<% if (member.lastActive) { %> · last active <t:<%= Math.floor(member.lastActive / 1000) %>:R><% } %></small>
+                    </span>
+                    <span class="badge <%= member.efficiencyScore >= settings.staffPromotionThreshold ? 'badge-success' : 'badge-muted' %>"><%= member.efficiencyScore >= settings.staffPromotionThreshold ? 'Promote' : 'Developing' %></span>
+                  </div>
+                <% }); %>
+              </div>
+            <% } %>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'brain', size: 18 }) %></span>
+                <div>
+                  <h3>Admin advice</h3>
+                  <p class="muted">Promote, coach or demote with a role ID.</p>
+                </div>
+              </div>
+            </div>
+            <% if (!activity.staffAdviceExtended || activity.staffAdviceExtended.length === 0) { %>
+              <div class="empty-inline">No advice yet. Run a review after staff activity builds up.</div>
+            <% } else { %>
+              <div class="data-list">
+                <% activity.staffAdviceExtended.slice(0, 8).forEach(function (advice) { %>
+                  <div class="data-row staff-advice-row">
+                    <span>
+                      <strong>&lt;@<%= advice.userId %>&gt; · <b><%= advice.action %></b></strong>
+                      <small><%= advice.reason %><% if (advice.score !== undefined) { %> · score <%= advice.score %><% } %></small>
+                    </span>
+                    <span class="staff-advice-actions">
+                      <input class="input input-compact" id="staffOpsRole-<%= advice.userId %>" type="text" maxlength="25" placeholder="Role ID">
+                      <button type="button" class="btn btn-ghost btn-sm" data-staff-action="promote" data-staff-user="<%= advice.userId %>">Promote</button>
+                      <button type="button" class="btn btn-ghost btn-sm" data-staff-action="demote" data-staff-user="<%= advice.userId %>">Demote</button>
+                      <button type="button" class="btn btn-ghost btn-sm" data-staff-action="remove" data-staff-user="<%= advice.userId %>">Remove</button>
+                    </span>
+                  </div>
+                <% }); %>
+              </div>
+            <% } %>
+          </div>
+        </div>
+
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'activity', size: 18 }) %></span>
+                <div>
+                  <h3>Recent staff log</h3>
+                  <p class="muted">Every moderation, ticket, application and promotion action.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list">
+              <% if (!activity.staffRecentActions || activity.staffRecentActions.length === 0) { %>
+                <div class="empty-inline">No staff actions logged yet.</div>
+              <% } else { %>
+                <% activity.staffRecentActions.slice(0, 20).forEach(function (action) { %>
+                  <div class="data-row">
+                    <span><strong>&lt;@<%= action.staffId %>&gt; · <%= action.action.replace(/_/g, ' ') %></strong><small><t:<%= Math.floor(action.timestamp / 1000) %>:R><% if (action.details && action.details.reason) { %> · <%= action.details.reason %><% } %></small></span>
+                  </div>
+                <% }); %>
+              <% } %>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'sliders', size: 18 }) %></span>
+                <div>
+                  <h3>Staff Operations settings</h3>
+                  <p class="muted">Choose log channels and when Zyron recommends a promotion.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field"><span>Staff action log channel</span><select class="input" data-channel-picker id="staffLogChannelId" data-selected="<%= settings.staffLogChannelId || '' %>"></select></label>
+            <label class="field"><span>Promotion advice channel</span><select class="input" data-channel-picker id="staffAdviceChannelId" data-selected="<%= settings.staffAdviceChannelId || '' %>"></select></label>
+            <div class="panel-grid two">
+              <label class="field"><span>Promotion threshold (points)</span><input class="input" id="staffPromotionThreshold" type="number" min="10" value="<%= settings.staffPromotionThreshold %>"></label>
+              <label class="field"><span>Inactive after (days)</span><input class="input" id="staffInactiveDays" type="number" min="1" value="<%= settings.staffInactiveDays %>"></label>
+              <label class="field"><span>Review interval (hours)</span><input class="input" id="staffReviewIntervalHours" type="number" min="1" value="<%= settings.staffReviewIntervalHours %>"></label>
+            </div>
+            <label class="checkbox-row"><input type="checkbox" id="staffOpsEnabled" <%= settings.staffOpsEnabled ? 'checked' : '' %>> Track staff activity and send promotion advice</label>
           </div>
         </div>
       </section>
@@ -1484,6 +1823,89 @@
                 <% }); %>
               <% } %>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel" data-panel="progression" id="panel-progression">
+        <div class="panel-head">
+          <div>
+            <span class="eyebrow">Community</span>
+            <h2>Community Progression 2.0</h2>
+            <p class="muted">Daily and weekly quests, badges, streaks and the community leaderboard. Badges appear on every member profile.</p>
+          </div>
+          <span class="badge <%= settings.questsEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.questsEnabled ? 'Quests live' : 'Quests off' %></span>
+        </div>
+
+        <div class="panel-grid two-one">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'star', size: 18 }) %></span>
+                <div>
+                  <h3>Quest goals</h3>
+                  <p class="muted">Members earn coins automatically when they hit these targets.</p>
+                </div>
+              </div>
+            </div>
+            <div class="panel-grid three">
+              <label class="field"><span>Daily messages</span><input class="input" id="questDailyMessages" type="number" min="1" value="<%= settings.questDailyMessages %>"></label>
+              <label class="field"><span>Daily voice minutes</span><input class="input" id="questDailyVoice" type="number" min="1" value="<%= settings.questDailyVoice %>"></label>
+              <label class="field"><span>Daily reward coins</span><input class="input" id="questDailyCoins" type="number" min="0" value="<%= settings.questDailyCoins %>"></label>
+              <label class="field"><span>Weekly messages</span><input class="input" id="questWeeklyMessages" type="number" min="1" value="<%= settings.questWeeklyMessages %>"></label>
+              <label class="field"><span>Weekly voice minutes</span><input class="input" id="questWeeklyVoice" type="number" min="1" value="<%= settings.questWeeklyVoice %>"></label>
+              <label class="field"><span>Weekly purchases</span><input class="input" id="questWeeklyPurchases" type="number" min="1" value="<%= settings.questWeeklyPurchases %>"></label>
+              <label class="field"><span>Weekly reward coins</span><input class="input" id="questWeeklyCoins" type="number" min="0" value="<%= settings.questWeeklyCoins %>"></label>
+              <label class="field"><span>Progression log channel</span><select class="input" data-channel-picker id="progressionLogChannelId" data-selected="<%= settings.progressionLogChannelId || '' %>"></select></label>
+            </div>
+            <label class="checkbox-row"><input type="checkbox" id="questsEnabled" <%= settings.questsEnabled ? 'checked' : '' %>> Enable daily and weekly quests</label>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'users', size: 18 }) %></span>
+                <div>
+                  <h3>Top progression</h3>
+                  <p class="muted">Badges first, then level and XP.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list">
+              <% if (!activity.progressionLeaderboard || activity.progressionLeaderboard.length === 0) { %>
+                <div class="empty-inline">No progression activity yet.</div>
+              <% } else { %>
+                <% activity.progressionLeaderboard.forEach(function (entry, index) { %>
+                  <div class="data-row">
+                    <span><strong>#<%= index + 1 %> &lt;@<%= entry.userId %>&gt;</strong><small>Level <%= entry.level %> · <%= entry.badgeCount %> badges · <%= entry.questsCompleted %> quests · <%= entry.streak %> day streak</small></span>
+                  </div>
+                <% }); %>
+              <% } %>
+            </div>
+          </div>
+        </div>
+
+        <div class="card glass">
+          <div class="card-head">
+            <div class="card-title">
+              <span class="card-icon"><%- include('partials/icon', { name: 'star', size: 18 }) %></span>
+              <div>
+                <h3>Badge library</h3>
+                <p class="muted">Every badge is unlocked automatically from real activity. Click Save changes to publish quest settings.</p>
+              </div>
+            </div>
+          </div>
+          <div class="profile-badges">
+            <% (activity.progressionBadges || []).forEach(function (badge) { %>
+              <div class="profile-badge unlocked">
+                <span class="profile-badge-icon"><%= badge.emoji || '🏅' %></span>
+                <span><strong><%= badge.name %></strong><small><%= badge.description || 'Community badge' %></small></span>
+                <span class="profile-badge-progress"><%= badge.count || 0 %> members</span>
+              </div>
+            <% }); %>
+            <% if (!activity.progressionBadges || activity.progressionBadges.length === 0) { %>
+              <div class="empty-inline">Badges appear here as members unlock them. The full badge list is available on each profile.</div>
+            <% } %>
           </div>
         </div>
       </section>
@@ -2317,6 +2739,31 @@
           ticketPriorityEnabled: checked('ticketPriorityEnabled'),
           ticketPriorities: value('ticketPriorities').split(',').map(function (item) { return item.trim(); }).filter(Boolean),
           bannedNickPatterns: value('nickPatterns').split('\n').map(function (item) { return item.trim(); }).filter(Boolean),
+          joinGateEnabled: checked('joinGateEnabled'),
+          joinGateChallengeEnabled: checked('joinGateChallengeEnabled'),
+          joinGateQuarantineRoleId: value('joinGateQuarantineRoleId'),
+          joinGateRiskThreshold: value('joinGateRiskThreshold'),
+          joinGateMinAccountAgeDays: value('joinGateMinAccountAgeDays'),
+          joinGateHighRiskAction: value('joinGateHighRiskAction'),
+          joinGateHoneypotChannelId: value('joinGateHoneypotChannelId'),
+          joinGateHoneypotAction: value('joinGateHoneypotAction'),
+          joinGateLogChannelId: value('joinGateLogChannelId'),
+          joinGateChallengeChannelId: value('joinGateChallengeChannelId'),
+          questsEnabled: checked('questsEnabled'),
+          questDailyMessages: value('questDailyMessages'),
+          questDailyVoice: value('questDailyVoice'),
+          questDailyCoins: value('questDailyCoins'),
+          questWeeklyMessages: value('questWeeklyMessages'),
+          questWeeklyVoice: value('questWeeklyVoice'),
+          questWeeklyPurchases: value('questWeeklyPurchases'),
+          questWeeklyCoins: value('questWeeklyCoins'),
+          progressionLogChannelId: value('progressionLogChannelId'),
+          staffOpsEnabled: checked('staffOpsEnabled'),
+          staffLogChannelId: value('staffLogChannelId'),
+          staffAdviceChannelId: value('staffAdviceChannelId'),
+          staffPromotionThreshold: value('staffPromotionThreshold'),
+          staffInactiveDays: value('staffInactiveDays'),
+          staffReviewIntervalHours: value('staffReviewIntervalHours'),
           features: {}
         };
         document.querySelectorAll('.feature-toggle[data-feature]').forEach(function (input) {
@@ -2413,7 +2860,7 @@
         button.addEventListener('click', async function () {
           var action = button.getAttribute('data-staff-action');
           var userId = button.getAttribute('data-staff-user');
-          var roleInput = byId('staffRole-' + userId);
+          var roleInput = byId('staffOpsRole-' + userId) || byId('staffRole-' + userId);
           var roleId = roleInput ? roleInput.value.trim() : '';
           if (action !== 'remove' && !roleId) {
             toast('Enter the staff role ID first.', 'error');
@@ -2438,6 +2885,50 @@
         });
       });
 
+
+      document.querySelectorAll('[data-joingate-action]').forEach(function (button) {
+        button.addEventListener('click', async function () {
+          var action = button.getAttribute('data-joingate-action');
+          var eventId = button.getAttribute('data-joingate-event');
+          if (!eventId) return;
+          button.disabled = true;
+          try {
+            var response = await fetch('/api/server/' + Z.serverId + '/joingate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: action, eventId: eventId })
+            });
+            var data = await response.json().catch(function () { return {}; });
+            if (!response.ok || !data.ok) throw new Error(data.error || 'Could not update the join gate event.');
+            toast(action === 'release' ? 'Member released' : 'Member kicked', 'success');
+            setTimeout(function () { window.location.reload(); }, 800);
+          } catch (error) {
+            toast(error.message || 'Could not update the join gate event.', 'error');
+            button.disabled = false;
+          }
+        });
+      });
+
+      document.querySelectorAll('[data-staffops-review]').forEach(function (button) {
+        button.addEventListener('click', async function () {
+          button.disabled = true;
+          try {
+            var response = await fetch('/api/server/' + Z.serverId + '/staffops/review', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({})
+            });
+            var data = await response.json().catch(function () { return {}; });
+            if (!response.ok || !data.ok) throw new Error(data.error || 'Could not run the staff review.');
+            toast('Promotion review posted', 'success');
+            setTimeout(function () { window.location.reload(); }, 900);
+          } catch (error) {
+            toast(error.message || 'Could not run the staff review.', 'error');
+          } finally {
+            button.disabled = false;
+          }
+        });
+      });
 
       if (byId('addTicketButton')) {
         byId('addTicketButton').addEventListener('click', function () {

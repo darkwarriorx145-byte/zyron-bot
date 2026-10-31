@@ -374,6 +374,32 @@ function defaultGuild() {
     serverAuditChannelId: null,
     serverAuditLastAt: null,
     serverAuditReport: null,
+    joinGateEnabled: false,
+    joinGateChallengeEnabled: true,
+    joinGateQuarantineRoleId: null,
+    joinGateRiskThreshold: 60,
+    joinGateMinAccountAgeDays: 7,
+    joinGateHighRiskAction: 'quarantine',
+    joinGateHoneypotChannelId: null,
+    joinGateHoneypotAction: 'timeout',
+    joinGateLogChannelId: null,
+    joinGateChallengeChannelId: null,
+    questsEnabled: false,
+    questDailyMessages: 50,
+    questDailyVoice: 30,
+    questDailyCoins: 50,
+    questWeeklyMessages: 250,
+    questWeeklyVoice: 180,
+    questWeeklyPurchases: 3,
+    questWeeklyCoins: 250,
+    progressionLogChannelId: null,
+    staffOpsEnabled: true,
+    staffLogChannelId: null,
+    staffAdviceChannelId: null,
+    staffPromotionThreshold: 200,
+    staffInactiveDays: 14,
+    staffReviewIntervalHours: 24,
+    staffOpsLastReviewAt: null,
     extraOwners: [],
     whitelist: [],
     featureWhitelist: {},
@@ -562,6 +588,52 @@ function localActivity(guildId) {
     return { userId: userId, name: userId, count: counts[userId] };
   }).sort(function (a, b) { return b.count - a.count; });
 
+  const joinGateEvents = Array.isArray(data.joinGateEvents && data.joinGateEvents[guildId])
+    ? data.joinGateEvents[guildId].slice().reverse()
+    : [];
+  const joinGateStats = {
+    total: joinGateEvents.filter(function (event) { return event.type === 'join'; }).length,
+    pending: joinGateEvents.filter(function (event) { return event.status === 'pending' || event.status === 'flagged'; }).length,
+    verified: joinGateEvents.filter(function (event) { return event.status === 'verified' || event.status === 'released'; }).length,
+    blocked: joinGateEvents.filter(function (event) { return event.status === 'kicked' || event.status === 'blocked'; }).length,
+    honeypot: joinGateEvents.filter(function (event) { return event.type === 'honeypot'; }).length
+  };
+
+  const progressionData = data.progression && data.progression[guildId] ? data.progression[guildId] : {};
+  const badgeCounts = {};
+  Object.keys(progressionData).forEach(function (userId) {
+    const badges = progressionData[userId] && progressionData[userId].badges ? progressionData[userId].badges : {};
+    Object.keys(badges).forEach(function (badgeId) {
+      badgeCounts[badgeId] = (badgeCounts[badgeId] || 0) + 1;
+    });
+  });
+  const progressionBadges = Object.keys(badgeCounts).map(function (badgeId) {
+    return { id: badgeId, name: badgeId.replace(/_/g, ' '), emoji: '🏅', description: '', count: badgeCounts[badgeId] };
+  });
+  const progressionLeaderboard = Object.keys(progressionData).map(function (userId) {
+    const record = progressionData[userId] || {};
+    const levelRecord = data.levels && data.levels[guildId] ? data.levels[guildId][userId] || {} : {};
+    return {
+      userId: userId,
+      level: levelRecord.level || 0,
+      totalXp: levelRecord.totalXp || 0,
+      badgeCount: Object.keys(record.badges || {}).length,
+      questsCompleted: record.totals && record.totals.questsCompleted ? record.totals.questsCompleted : 0,
+      streak: record.streak && record.streak.count ? record.streak.count : 0
+    };
+  }).sort(function (a, b) {
+    if (b.badgeCount !== a.badgeCount) return b.badgeCount - a.badgeCount;
+    return b.totalXp - a.totalXp;
+  }).slice(0, 10);
+
+  const staffRecentActions = Array.isArray(data.staffActions && data.staffActions[guildId])
+    ? data.staffActions[guildId].slice(-25).reverse()
+    : [];
+  const staffMetricsMap = data.staffMetrics && data.staffMetrics[guildId] ? data.staffMetrics[guildId] : {};
+  const staffMetricsList = Object.keys(staffMetricsMap).map(function (userId) {
+    return Object.assign({ userId: userId }, staffMetricsMap[userId]);
+  });
+
   return {
     tickets: tickets.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 25),
     staffApplications: applications.slice().sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); }).slice(0, 25),
@@ -622,7 +694,18 @@ function localActivity(guildId) {
     healthReport: data.guilds && data.guilds[guildId] ? (data.guilds[guildId].serverAuditReport || null) : null,
     integrations: Array.isArray(data.integrations && data.integrations[guildId]) ? data.integrations[guildId] : [],
     tempActions: Array.isArray(data.tempActions && data.tempActions[guildId]) ? data.tempActions[guildId] : [],
-    schedules: Array.isArray(data.schedules && data.schedules[guildId]) ? data.schedules[guildId] : []
+    schedules: Array.isArray(data.schedules && data.schedules[guildId]) ? data.schedules[guildId] : [],
+    joinGate: { stats: joinGateStats, events: joinGateEvents.slice(0, 50) },
+    progressionBadges: progressionBadges,
+    progressionLeaderboard: progressionLeaderboard,
+    staffRecentActions: staffRecentActions,
+    staffOpsStats: {
+      tracked: staffMetricsList.length,
+      activeThisWeek: staffMetricsList.filter(function (row) {
+        return (row.lastActive || 0) >= Date.now() - 7 * 86400000;
+      }).length,
+      promotionReady: 0
+    }
   };
 }
 
@@ -636,6 +719,69 @@ async function loadGuildActivity(guildId) {
     }
   }
   return localActivity(guildId);
+}
+
+async function loadUserProfile(guildId, userId) {
+  if (REMOTE_MODE) {
+    try {
+      const result = await botApi.getUserProfile(guildId, userId);
+      return result.profile || null;
+    } catch (err) {
+      console.warn('Bot API profile lookup failed; using local bot DB:', err.message);
+    }
+  }
+
+  const data = readBotDB();
+  const levelRecord = data.levels && data.levels[guildId] ? data.levels[guildId][userId] || {} : {};
+  const progression = data.progression && data.progression[guildId] ? data.progression[guildId][userId] || {} : {};
+  const invites = data.invites && data.invites[guildId] ? data.invites[guildId][userId] || {} : {};
+  const coins = data.coins && data.coins[guildId] ? data.coins[guildId][userId] || 0 : 0;
+  const messages = data.messages && data.messages[guildId] ? data.messages[guildId][userId] || 0 : 0;
+  const warnings = data.warnings && data.warnings[guildId + '_' + userId] ? data.warnings[guildId + '_' + userId] : [];
+  const badges = Object.keys(progression.badges || {}).map(function (badgeId) {
+    return {
+      id: badgeId,
+      name: badgeId.replace(/_/g, ' '),
+      emoji: '🏅',
+      description: '',
+      unlocked: true,
+      unlockedAt: progression.badges[badgeId],
+      progress: 100
+    };
+  });
+  const levelStore = data.levels && data.levels[guildId] ? data.levels[guildId] : {};
+  const sorted = Object.keys(levelStore).sort(function (a, b) {
+    return (levelStore[b].totalXp || 0) - (levelStore[a].totalXp || 0);
+  });
+
+  return {
+    userId: userId,
+    username: null,
+    displayName: null,
+    avatar: null,
+    joinedAt: null,
+    level: levelRecord.level || 0,
+    totalXp: levelRecord.totalXp || 0,
+    rank: sorted.indexOf(userId) === -1 ? sorted.length + 1 : sorted.indexOf(userId) + 1,
+    totalRanked: sorted.length,
+    progress: 0,
+    needed: 100,
+    coins: coins,
+    coinsEarned: levelRecord.coinsEarned || 0,
+    messages: Math.max(messages, levelRecord.messages || 0),
+    voiceMinutes: levelRecord.voiceMinutes || 0,
+    invites: invites.real || invites.total || 0,
+    purchases: 0,
+    questsCompleted: progression.totals && progression.totals.questsCompleted ? progression.totals.questsCompleted : 0,
+    streak: progression.streak && progression.streak.count ? progression.streak.count : 0,
+    vouches: 0,
+    warnings: warnings.length,
+    badges: badges,
+    badgeCount: badges.length,
+    totalBadges: badges.length,
+    quests: [],
+    questsEnabled: false
+  };
 }
 
 async function saveGuildSettings(guildId, updates) {
@@ -1333,6 +1479,13 @@ app.get('/server/:id', requireAuth, async function (req, res, next) {
       console.warn('Could not load server activity:', err.message);
     }
 
+    let viewerProfile = null;
+    try {
+      viewerProfile = await loadUserProfile(serverId, req.user.id);
+    } catch (err) {
+      console.warn('Could not load viewer profile:', err.message);
+    }
+
     return res.render('server', {
       serverId: serverId,
       serverName: (userGuild && userGuild.name) || (botGuild && botGuild.name) || ('Server ' + serverId),
@@ -1362,8 +1515,14 @@ app.get('/server/:id', requireAuth, async function (req, res, next) {
         healthReport: null,
         integrations: [],
         tempActions: [],
-        schedules: []
+        schedules: [],
+        joinGate: { stats: { total: 0, pending: 0, verified: 0, blocked: 0, honeypot: 0 }, events: [] },
+        progressionBadges: [],
+        progressionLeaderboard: [],
+        staffRecentActions: [],
+        staffOpsStats: { tracked: 0, activeThisWeek: 0, promotionReady: 0 }
       },
+      viewerProfile: viewerProfile,
       featureCatalog: FEATURE_CATALOG,
       featureGroups: FEATURE_GROUPS,
       featureLibrary: FEATURE_LIBRARY,
@@ -1537,7 +1696,14 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     'levelUpChannelId',
     'shopChannelId',
     'shopLogChannel',
-    'serverAuditChannelId'
+    'serverAuditChannelId',
+    'joinGateQuarantineRoleId',
+    'joinGateHoneypotChannelId',
+    'joinGateLogChannelId',
+    'joinGateChallengeChannelId',
+    'progressionLogChannelId',
+    'staffLogChannelId',
+    'staffAdviceChannelId'
   ];
   extraIdFields.forEach(function (field) {
     if (body[field] === undefined) return;
@@ -1556,11 +1722,22 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     'ticketPriorityEnabled',
     'levelsEnabled',
     'shopEnabled',
-    'serverAuditEnabled'
+    'serverAuditEnabled',
+    'joinGateEnabled',
+    'joinGateChallengeEnabled',
+    'questsEnabled',
+    'staffOpsEnabled'
   ];
   booleanFields.forEach(function (field) {
     if (body[field] !== undefined) updates[field] = Boolean(body[field]);
   });
+
+  if (['quarantine', 'kick', 'log'].indexOf(body.joinGateHighRiskAction) !== -1) {
+    updates.joinGateHighRiskAction = body.joinGateHighRiskAction;
+  }
+  if (['timeout', 'kick', 'ban'].indexOf(body.joinGateHoneypotAction) !== -1) {
+    updates.joinGateHoneypotAction = body.joinGateHoneypotAction;
+  }
 
   if (typeof body.verificationRules === 'string' || body.verificationRules === null) {
     updates.verificationRules = cleanText(body.verificationRules, 4000);
@@ -1595,7 +1772,19 @@ app.post('/api/server/:id/update', requireAuth, async function (req, res) {
     coinsPerMessage: [0, 100000],
     coinsPerVoiceMinute: [0, 100000],
     coinsPerLevel: [0, 100000],
-    serverAuditIntervalHours: [1, 720]
+    serverAuditIntervalHours: [1, 720],
+    joinGateRiskThreshold: [0, 100],
+    joinGateMinAccountAgeDays: [0, 365],
+    questDailyMessages: [1, 100000],
+    questDailyVoice: [1, 100000],
+    questDailyCoins: [0, 100000],
+    questWeeklyMessages: [1, 100000],
+    questWeeklyVoice: [1, 100000],
+    questWeeklyPurchases: [1, 10000],
+    questWeeklyCoins: [0, 100000],
+    staffPromotionThreshold: [10, 100000],
+    staffInactiveDays: [1, 3650],
+    staffReviewIntervalHours: [1, 720]
   };
   Object.keys(growthNumbers).forEach(function (field) {
     if (body[field] === undefined) return;
@@ -1780,6 +1969,22 @@ app.post('/api/server/:id/staff/action', requireAuth, async function (req, res) 
   } catch (err) {
     return res.status(400).json({ ok: false, error: err.message });
   }
+});
+
+app.post('/api/server/:id/joingate', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId, body) {
+    const action = String(body.action || '').toLowerCase();
+    if (action !== 'release' && action !== 'kick') {
+      throw new Error('Join Gate action must be release or kick.');
+    }
+    return botApi.resolveJoinGate(serverId, action, body.eventId, body.userId);
+  });
+});
+
+app.post('/api/server/:id/staffops/review', requireAuth, async function (req, res) {
+  await relayBotAction(req, res, function (serverId) {
+    return botApi.runStaffOpsReview(serverId);
+  });
 });
 
 app.post('/api/server/:id/ticket/panel', requireAuth, async function (req, res) {

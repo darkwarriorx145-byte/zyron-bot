@@ -105,6 +105,29 @@ async function staffAction(guildId, payload) {
   return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/staff/action', payload || {});
 }
 
+async function getUserProfile(guildId, userId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/profile/' + encodeURIComponent(userId));
+}
+
+async function getJoinGate(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/joingate');
+}
+
+async function resolveJoinGate(guildId, action, eventId, userId) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/joingate/' + encodeURIComponent(action), {
+    eventId: eventId || null,
+    userId: userId || null
+  });
+}
+
+async function getStaffOps(guildId) {
+  return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/staffops');
+}
+
+async function runStaffOpsReview(guildId) {
+  return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/staffops/review', {});
+}
+
 async function listChannels(guildId) {
   return request('GET', '/api/guilds/' + encodeURIComponent(guildId) + '/channels');
 }
@@ -279,6 +302,11 @@ module.exports = {
   getActivity: getActivity,
   reviewAppeal: reviewAppeal,
   staffAction: staffAction,
+  getUserProfile: getUserProfile,
+  getJoinGate: getJoinGate,
+  resolveJoinGate: resolveJoinGate,
+  getStaffOps: getStaffOps,
+  runStaffOpsReview: runStaffOpsReview,
   listChannels: listChannels,
   listRoles: listRoles,
   listCustomCommands: listCustomCommands,

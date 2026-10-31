@@ -10,6 +10,7 @@ const {
 } = require('discord.js');
 const db = require('../database/db');
 const config = require('../../config.json');
+const staffTracker = require('../utils/staffTracker');
 const theme = require('../utils/theme');
 
 const DEFAULT_PANEL_TITLE = '📝 ' + config.botName + ' Staff Applications';
@@ -258,6 +259,11 @@ module.exports = {
         reviewedBy: interaction.user.id,
         reviewedAt: Date.now(),
         messageId: interaction.message ? interaction.message.id : null
+      });
+
+      staffTracker.logStaffAction(interaction.guild.id, interaction.user.id, accepted ? 'application_accept' : 'application_deny', {
+        target: userId,
+        reason: accepted ? 'Staff application accepted' : 'Staff application denied'
       });
 
       const user = await client.users.fetch(userId).catch(function () {

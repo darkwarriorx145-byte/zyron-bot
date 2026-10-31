@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { EmbedBuilder } = require('discord.js');
 const config = require('../../config.json');
 const db = require('../database/db');
+const progression = require('./progression');
 
 function ensureGuild(guildId) {
   if (!db.data.shops[guildId]) db.data.shops[guildId] = [];
@@ -130,6 +131,12 @@ async function purchase(guild, member, itemId, settings) {
   if (!db.data.purchases[guild.id]) db.data.purchases[guild.id] = [];
   db.data.purchases[guild.id].push(purchaseRecord);
   db.save();
+
+  try {
+    progression.recordActivity(guild.id, member.id, 'purchase', 1, guild.client);
+  } catch (err) {
+    console.error('Progression purchase activity failed:', err.message);
+  }
 
   const logId = settings.shopLogChannel || settings.logChannel;
   const logChannel = logId ? guild.channels.cache.get(logId) : null;

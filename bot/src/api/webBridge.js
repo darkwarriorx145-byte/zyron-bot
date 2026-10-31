@@ -20,6 +20,8 @@ const tempActions = require('../utils/tempActions');
 const scheduler = require('../utils/scheduler');
 const serverAudit = require('../utils/serverAudit');
 const integrations = require('../utils/integrations');
+const joinGate = require('../utils/joinGate');
+const progression = require('../utils/progression');
 
 const API_KEY = process.env.BOT_API_KEY || process.env.ZYRON_API_KEY || '';
 const ENABLED = String(process.env.BOT_API_ENABLED || '').toLowerCase() === 'true' || Boolean(API_KEY);
@@ -213,6 +215,32 @@ function summarizeSettings(settings) {
     serverAuditChannelId: settings.serverAuditChannelId || null,
     serverAuditLastAt: settings.serverAuditLastAt || null,
     serverAuditReport: settings.serverAuditReport || null,
+    joinGateEnabled: settings.joinGateEnabled === true,
+    joinGateChallengeEnabled: settings.joinGateChallengeEnabled !== false,
+    joinGateQuarantineRoleId: settings.joinGateQuarantineRoleId || null,
+    joinGateRiskThreshold: settings.joinGateRiskThreshold || 60,
+    joinGateMinAccountAgeDays: settings.joinGateMinAccountAgeDays || 7,
+    joinGateHighRiskAction: settings.joinGateHighRiskAction || 'quarantine',
+    joinGateHoneypotChannelId: settings.joinGateHoneypotChannelId || null,
+    joinGateHoneypotAction: settings.joinGateHoneypotAction || 'timeout',
+    joinGateLogChannelId: settings.joinGateLogChannelId || null,
+    joinGateChallengeChannelId: settings.joinGateChallengeChannelId || null,
+    questsEnabled: settings.questsEnabled === true,
+    questDailyMessages: settings.questDailyMessages || 50,
+    questDailyVoice: settings.questDailyVoice || 30,
+    questDailyCoins: settings.questDailyCoins || 50,
+    questWeeklyMessages: settings.questWeeklyMessages || 250,
+    questWeeklyVoice: settings.questWeeklyVoice || 180,
+    questWeeklyPurchases: settings.questWeeklyPurchases || 3,
+    questWeeklyCoins: settings.questWeeklyCoins || 250,
+    progressionLogChannelId: settings.progressionLogChannelId || null,
+    staffOpsEnabled: settings.staffOpsEnabled !== false,
+    staffLogChannelId: settings.staffLogChannelId || null,
+    staffAdviceChannelId: settings.staffAdviceChannelId || null,
+    staffPromotionThreshold: settings.staffPromotionThreshold || 200,
+    staffInactiveDays: settings.staffInactiveDays || 14,
+    staffReviewIntervalHours: settings.staffReviewIntervalHours || 24,
+    staffOpsLastReviewAt: settings.staffOpsLastReviewAt || null,
     features: settings.features || {}
   };
 }
@@ -484,7 +512,14 @@ function sanitizeSettings(guildId, input) {
     'levelUpChannelId',
     'shopChannelId',
     'shopLogChannel',
-    'serverAuditChannelId'
+    'serverAuditChannelId',
+    'joinGateQuarantineRoleId',
+    'joinGateHoneypotChannelId',
+    'joinGateLogChannelId',
+    'joinGateChallengeChannelId',
+    'progressionLogChannelId',
+    'staffLogChannelId',
+    'staffAdviceChannelId'
   ];
   growthIdFields.forEach(function (field) {
     if (body[field] === undefined) return;
@@ -493,10 +528,17 @@ function sanitizeSettings(guildId, input) {
     updates[field] = value;
   });
 
-  const growthBooleans = ['levelsEnabled', 'shopEnabled', 'serverAuditEnabled'];
+  const growthBooleans = ['levelsEnabled', 'shopEnabled', 'serverAuditEnabled', 'joinGateEnabled', 'joinGateChallengeEnabled', 'questsEnabled', 'staffOpsEnabled'];
   growthBooleans.forEach(function (field) {
     if (body[field] !== undefined) updates[field] = Boolean(body[field]);
   });
+
+  if (['quarantine', 'kick', 'log'].indexOf(body.joinGateHighRiskAction) !== -1) {
+    updates.joinGateHighRiskAction = body.joinGateHighRiskAction;
+  }
+  if (['timeout', 'kick', 'ban'].indexOf(body.joinGateHoneypotAction) !== -1) {
+    updates.joinGateHoneypotAction = body.joinGateHoneypotAction;
+  }
 
   const growthNumbers = {
     xpPerMessage: [0, 1000],
@@ -505,7 +547,19 @@ function sanitizeSettings(guildId, input) {
     coinsPerMessage: [0, 100000],
     coinsPerVoiceMinute: [0, 100000],
     coinsPerLevel: [0, 100000],
-    serverAuditIntervalHours: [1, 720]
+    serverAuditIntervalHours: [1, 720],
+    joinGateRiskThreshold: [0, 100],
+    joinGateMinAccountAgeDays: [0, 365],
+    questDailyMessages: [1, 100000],
+    questDailyVoice: [1, 100000],
+    questDailyCoins: [0, 100000],
+    questWeeklyMessages: [1, 100000],
+    questWeeklyVoice: [1, 100000],
+    questWeeklyPurchases: [1, 10000],
+    questWeeklyCoins: [0, 100000],
+    staffPromotionThreshold: [10, 100000],
+    staffInactiveDays: [1, 3650],
+    staffReviewIntervalHours: [1, 720]
   };
   Object.keys(growthNumbers).forEach(function (field) {
     if (body[field] === undefined) return;
@@ -711,6 +765,17 @@ function activityPayload(guildId) {
     }),
     shopItems: shop.getItems(guildId),
     purchases: (db.data.purchases[guildId] || []).slice(-25).reverse(),
+    joinGate: joinGate.getStatus(guildId),
+    progressionBadges: progression.getBadgeStats(guildId),
+    progressionLeaderboard: progression.getLeaderboard(guildId, 10),
+    staffRecentActions: staffTracker.getRecentActions(guildId, 25),
+    staffOpsStats: {
+      tracked: staffMetrics.length,
+      activeThisWeek: staffMetrics.filter(function (row) {
+        return (row.lastActive || 0) >= Date.now() - 7 * 86400000;
+      }).length,
+      promotionReady: staffAdviceExtended.filter(function (row) { return row.action === 'promote'; }).length
+    },
     healthReport: db.getGuild(guildId).serverAuditReport || null,
     integrations: integrations.list(guildId).map(function (item) {
       return {
@@ -792,6 +857,12 @@ async function staffRoleAction(guild, settings, body) {
       ]
     }).catch(function () {});
   }
+
+  staffTracker.logStaffAction(guild.id, 'dashboard', action === 'promote' ? 'staff_promote' : (action === 'remove' ? 'staff_remove' : 'staff_demote'), {
+    target: member.id,
+    role: changed.join(', ') || null,
+    reason: 'Applied from the Zyron dashboard'
+  });
 
   return { memberId: member.id, action: action, roles: changed };
 }
@@ -951,6 +1022,97 @@ async function handle(req, res) {
     } catch (err) {
       return json(res, 400, { ok: false, error: err.message });
     }
+  }
+
+  const profileMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/profile\/(\d{5,25})$/);
+  if (profileMatch) {
+    if (req.method !== 'GET') return json(res, 405, { ok: false, error: 'Method not allowed.' });
+    const guildId = profileMatch[1];
+    const userId = profileMatch[2];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+    return json(res, 200, {
+      ok: true,
+      profile: progression.getProfile(guildId, userId, guild),
+      staff: staffTracker.getStaffMetrics(guildId, userId)
+    });
+  }
+
+  const joinGateMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/joingate(?:\/(release|kick))?$/);
+  if (joinGateMatch) {
+    const guildId = joinGateMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET' && !joinGateMatch[2]) {
+      return json(res, 200, { ok: true, joinGate: joinGate.getStatus(guildId) });
+    }
+
+    if (req.method === 'POST' && joinGateMatch[2]) {
+      let body = {};
+      try {
+        body = await readBody(req);
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+      try {
+        const settings = db.getGuild(guildId);
+        let eventId = String(body.eventId || '').trim();
+        if (!eventId && body.userId) {
+          const pending = joinGate.findPendingEvent(guildId, String(body.userId));
+          eventId = pending ? pending.id : '';
+        }
+        if (!eventId) return json(res, 400, { ok: false, error: 'A pending join gate event is required.' });
+        const status = await joinGate.resolveEvent(guild, settings, eventId, joinGateMatch[2], 'dashboard');
+        return json(res, 200, { ok: true, joinGate: status });
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
+  }
+
+  const staffOpsMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/staffops(?:\/(review))?$/);
+  if (staffOpsMatch) {
+    const guildId = staffOpsMatch[1];
+    const guild = botClient && botClient.guilds && botClient.guilds.cache
+      ? botClient.guilds.cache.get(guildId) : null;
+    if (!guild) return json(res, 404, { ok: false, error: 'The bot is not in that server.' });
+
+    if (req.method === 'GET') {
+      const settings = db.getGuild(guildId);
+      const metrics = staffTracker.getAllStaffMetrics(guildId);
+      const advice = staffTracker.generateAdvice(guildId, settings);
+      return json(res, 200, {
+        ok: true,
+        tracking: settings.staffOpsEnabled === true,
+        metrics: metrics,
+        advice: advice,
+        actions: staffTracker.getRecentActions(guildId, 50),
+        stats: {
+          tracked: metrics.length,
+          activeThisWeek: metrics.filter(function (row) {
+            return (row.lastActive || 0) >= Date.now() - 7 * 86400000;
+          }).length,
+          promotionReady: advice.filter(function (row) { return row.action === 'promote'; }).length
+        }
+      });
+    }
+
+    if (req.method === 'POST' && staffOpsMatch[2] === 'review') {
+      try {
+        const settings = db.getGuild(guildId);
+        const advice = await staffTracker.runReview(guild, settings);
+        return json(res, 200, { ok: true, advice: advice || [] });
+      } catch (err) {
+        return json(res, 400, { ok: false, error: err.message });
+      }
+    }
+
+    return json(res, 405, { ok: false, error: 'Method not allowed.' });
   }
 
   const customCommandMatch = pathname.match(/^\/api\/guilds\/(\d{5,25})\/custom-commands(?:\/([A-Za-z0-9]+))?$/);

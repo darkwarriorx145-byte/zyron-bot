@@ -39,6 +39,11 @@
       <span class="nav-icon"><%- include('icon', { name: 'grid', size: 18 }) %></span>
       <span>Overview</span>
     </a>
+    <a class="<%= item('profile') %>" href="#profile" data-panel="profile">
+      <span class="nav-icon"><%- include('icon', { name: 'user', size: 18 }) %></span>
+      <span>My Profile</span>
+      <% if (activityData && activityData.progressionBadges && activityData.progressionBadges.length) { %><span class="nav-pill"><%= activityData.progressionBadges.length %></span><% } %>
+    </a>
 
     <span class="nav-label">Protection</span>
     <a class="<%= item('antinuke') %>" href="#antinuke" data-panel="antinuke">
@@ -49,6 +54,11 @@
     <a class="<%= item('antiraid') %>" href="#antiraid" data-panel="antiraid">
       <span class="nav-icon"><%- include('icon', { name: 'zap', size: 18 }) %></span>
       <span>Anti-Raid</span>
+    </a>
+    <a class="<%= item('joingate') %>" href="#joingate" data-panel="joingate">
+      <span class="nav-icon"><%- include('icon', { name: 'shield', size: 18 }) %></span>
+      <span>Join Gate 2.0</span>
+      <% if (settings.joinGateEnabled) { %><span class="status-dot tiny"></span><% } %>
     </a>
     <a class="<%= item('ai') %>" href="#ai" data-panel="ai">
       <span class="nav-icon"><%- include('icon', { name: 'brain', size: 18 }) %></span>
@@ -93,6 +103,11 @@
       <span>Levels &amp; XP</span>
       <% if (settings.levelsEnabled) { %><span class="status-dot tiny"></span><% } %>
     </a>
+    <a class="<%= item('progression') %>" href="#progression" data-panel="progression">
+      <span class="nav-icon"><%- include('icon', { name: 'star', size: 18 }) %></span>
+      <span>Progression</span>
+      <% if (settings.questsEnabled) { %><span class="status-dot tiny"></span><% } %>
+    </a>
     <a class="<%= item('shop') %>" href="#shop" data-panel="shop">
       <span class="nav-icon"><%- include('icon', { name: 'coins', size: 18 }) %></span>
       <span>Coin Shop</span>
@@ -104,6 +119,11 @@
       <span class="nav-icon"><%- include('icon', { name: 'activity', size: 18 }) %></span>
       <span>Server Health</span>
       <% if (settings.serverAuditEnabled) { %><span class="status-dot tiny"></span><% } %>
+    </a>
+    <a class="<%= item('staffops') %>" href="#staffops" data-panel="staffops">
+      <span class="nav-icon"><%- include('icon', { name: 'users', size: 18 }) %></span>
+      <span>Staff Ops</span>
+      <% if (settings.staffOpsEnabled) { %><span class="status-dot tiny"></span><% } %>
     </a>
     <a class="<%= item('integrations') %>" href="#integrations" data-panel="integrations">
       <span class="nav-icon"><%- include('icon', { name: 'link', size: 18 }) %></span>

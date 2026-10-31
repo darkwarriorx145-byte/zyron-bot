@@ -84,17 +84,33 @@ const CATEGORIES = [
     value: 'growth',
     label: 'Levels & Shop',
     emoji: ZyronEmbedBuilder.emoji('party'),
-    description: 'XP, levels, activity coins and the admin-run coin shop.',
-    blurb: 'Reward active members with levels, roles and coins.',
-    commands: ['levels', 'shop', 'schedule']
+    description: 'XP, levels, quests, badges, activity coins and the admin-run coin shop.',
+    blurb: 'Reward active members with levels, quests, badges, roles and coins.',
+    commands: ['levels', 'shop', 'schedule', 'badges', 'quests']
+  },
+  {
+    value: 'joingate',
+    label: 'Join Gate 2.0',
+    emoji: ZyronEmbedBuilder.emoji('shield'),
+    description: 'Risk scoring, quarantine, human challenges and honeypot traps.',
+    blurb: 'Stop alt accounts, raid accounts and bots before they reach your members.',
+    commands: ['joingate']
+  },
+  {
+    value: 'staffops',
+    label: 'Staff Operations',
+    emoji: ZyronEmbedBuilder.emoji('whitelist'),
+    description: 'Track staff activity, action logs and promotion advice.',
+    blurb: 'Know who is active, who needs coaching and who deserves a promotion.',
+    commands: ['staffops']
   },
   {
     value: 'community',
     label: 'Community',
     emoji: ZyronEmbedBuilder.emoji('party'),
-    description: 'Tickets, polls, giveaways and staff applications.',
+    description: 'Tickets, polls, giveaways, staff applications and profiles.',
     blurb: 'Engage and support your members.',
-    commands: ['ticket', 'poll', 'giveaway', 'staff-apply']
+    commands: ['ticket', 'poll', 'giveaway', 'staff-apply', 'profile']
   },
   {
     value: 'utility',

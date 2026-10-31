@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require('discord.js');
 const db = require('../database/db');
 const config = require('../../config.json');
+const progression = require('./progression');
 
 function getInviteStats(guildId, userId) {
   if (!db.data.invites[guildId]) return { total: 0, real: 0, fake: 0, left: 0, rejoined: 0, bonus: 0, codes: {} };
@@ -107,6 +108,12 @@ async function countVerifiedInvite(guild, member, settings) {
   const reward = Number(settings.economyInvite) > 0 ? Number(settings.economyInvite) : 0;
   if (!isFake && reward > 0) {
     db.addCoins(guild.id, inviterId, reward);
+  }
+
+  try {
+    progression.recordActivity(guild.id, inviterId, 'invite', 1, guild.client);
+  } catch (err) {
+    console.error('Progression invite activity failed:', err.message);
   }
 
   record.counted = true;

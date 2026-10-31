@@ -1,6 +1,8 @@
 const { EmbedBuilder } = require('discord.js');
 const config = require('../../config.json');
 const db = require('../database/db');
+const progression = require('./progression');
+const staffTracker = require('./staffTracker');
 
 const messageCooldowns = new Map();
 let voiceTimer = null;
@@ -232,11 +234,10 @@ async function tickVoice(client) {
   const guilds = client.guilds.cache;
   for (const guild of guilds.values()) {
     const settings = db.getGuild(guild.id);
-    if (!settings.levelsEnabled) continue;
+    if (!settings.levelsEnabled && !settings.questsEnabled && !settings.staffOpsEnabled) continue;
 
     const baseXp = Math.max(0, Number(settings.xpPerVoiceMinute) || 0);
     const coins = Math.max(0, Number(settings.coinsPerVoiceMinute) || 0);
-    if (baseXp <= 0 && coins <= 0) continue;
 
     const channels = guild.channels.cache.filter(function (channel) {
       return channel.type === 2 && channel.members && channel.members.size > 0;
@@ -248,12 +249,21 @@ async function tickVoice(client) {
         if (member.voice.selfDeaf || member.voice.selfMute || member.voice.serverDeaf) continue;
         if (guild.afkChannelId && member.voice.channelId === guild.afkChannelId) continue;
 
-        const result = await addXp(guild, member, baseXp, 'voice', settings);
-        if (coins > 0) {
-          db.addCoins(guild.id, member.id, coins);
-          getUser(guild.id, member.id).coinsEarned += coins;
-          if (result) result.coins += coins;
+        let result = null;
+        if (settings.levelsEnabled && (baseXp > 0 || coins > 0)) {
+          result = await addXp(guild, member, baseXp, 'voice', settings);
+          if (coins > 0) {
+            db.addCoins(guild.id, member.id, coins);
+            getUser(guild.id, member.id).coinsEarned += coins;
+            if (result) result.coins += coins;
+          }
         }
+        try {
+          progression.recordActivity(guild.id, member.id, 'voice', 1, client);
+        } catch (err) {
+          console.error('Progression voice activity failed:', err.message);
+        }
+        staffTracker.trackVoice(guild, member, settings);
         if (result && result.leveledUp) {
           await announce(guild, member, result, settings, 'voice');
         }
