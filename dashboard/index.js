@@ -1465,9 +1465,13 @@ app.use(function (req, res, next) {
 
     if (typeof session.regenerate !== 'function') {
       session.regenerate = function (callback) {
-        const fresh = {};
-        addPassportCompat(fresh);
-        req.session = fresh;
+        // Passport keeps a reference to this same session object while it
+        // regenerates. Replacing req.session here would make Passport write
+        // the logged-in user into an object cookie-session no longer saves.
+        Object.keys(session).forEach(function (key) {
+          delete session[key];
+        });
+        addPassportCompat(session);
         if (callback) callback(null);
       };
     }
