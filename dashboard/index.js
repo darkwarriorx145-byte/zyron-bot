@@ -1587,6 +1587,8 @@ app.get('/', function (req, res) {
 
 app.get('/login', function (req, res) {
   if (req.isAuthenticated && req.isAuthenticated()) return res.redirect('/dashboard');
+  res.clearCookie('zyron.sid', { path: '/', secure: SECURE_COOKIES, sameSite: 'lax' });
+  res.clearCookie('zyron.sid.sig', { path: '/', secure: SECURE_COOKIES, sameSite: 'lax' });
   return res.render('login', {
     error: req.query.error || null,
     oauthReady: OAUTH_READY
@@ -1714,7 +1716,8 @@ app.get('/auth/complete', function (req, res) {
 
 app.get('/logout', function (req, res) {
   req.session = null;
-  res.clearCookie('zyron.sid');
+  res.clearCookie('zyron.sid', { path: '/', secure: SECURE_COOKIES, sameSite: 'lax' });
+  res.clearCookie('zyron.sid.sig', { path: '/', secure: SECURE_COOKIES, sameSite: 'lax' });
   return res.redirect('/login');
 });
 
