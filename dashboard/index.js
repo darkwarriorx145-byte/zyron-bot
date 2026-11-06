@@ -1605,6 +1605,29 @@ app.get('/auth/debug', function (req, res) {
   });
 });
 
+app.get('/auth/session-check', function (req, res) {
+  if (req.isAuthenticated && req.isAuthenticated()) {
+    return res.status(403).json({ ok: false, error: 'Sign out before running the session check.' });
+  }
+
+  if (req.query.start === '1') {
+    const heldSession = req.session;
+    heldSession.diagBefore = 'yes';
+    return heldSession.regenerate(function () {
+      // Passport writes to the session reference it held before regenerate().
+      heldSession.diagAfterRegenerate = 'yes';
+      return res.redirect('/auth/session-check');
+    });
+  }
+
+  return res.json({
+    ok: true,
+    sessionMode: 'oauth-token-cookie',
+    regeneratePreserved: Boolean(req.session && req.session.diagAfterRegenerate === 'yes'),
+    oldDataCleared: !(req.session && req.session.diagBefore === 'yes')
+  });
+});
+
 app.get('/auth/discord', function (req, res, next) {
   if (!OAUTH_READY) {
     return res.redirect('/login?error=' + encodeURIComponent('Discord OAuth is not configured. Add DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET to the dashboard .env file.'));
