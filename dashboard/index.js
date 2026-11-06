@@ -1611,13 +1611,29 @@ app.get('/auth/discord', function (req, res, next) {
 });
 
 app.get('/auth/discord/callback', function (req, res, next) {
-  if (!OAUTH_READY) return res.redirect('/login');
-  return passport.authenticate('discord', {
-    callbackURL: oauthCallbackUrl(req),
-    failureRedirect: '/login?error=' + encodeURIComponent('Discord login failed. Register this exact redirect URI in the Discord Developer Portal: ' + oauthCallbackUrl(req))
+  if (!OAUTH_READY) {
+    return res.redirect('/login?error=' + encodeURIComponent('Discord OAuth is not configured on this dashboard.'));
+  }
+
+  const callbackURL = oauthCallbackUrl(req);
+  return passport.authenticate('discord', { callbackURL: callbackURL }, function (err, user) {
+    if (err) {
+      console.error('Discord OAuth callback error:', err && err.message ? err.message : err);
+      req.session = null;
+      return res.redirect('/login?error=' + encodeURIComponent('Discord could not complete the login. Please try again.'));
+    }
+    if (!user) {
+      return res.redirect('/login?error=' + encodeURIComponent('Discord login was cancelled or denied.'));
+    }
+    return req.logIn(user, function (loginErr) {
+      if (loginErr) {
+        console.error('Discord session creation error:', loginErr && loginErr.message ? loginErr.message : loginErr);
+        req.session = null;
+        return res.redirect('/login?error=' + encodeURIComponent('Could not create your dashboard session. Please try again.'));
+      }
+      return res.redirect('/dashboard');
+    });
   })(req, res, next);
-}, function (req, res) {
-  return res.redirect('/dashboard');
 });
 
 app.get('/logout', function (req, res) {
