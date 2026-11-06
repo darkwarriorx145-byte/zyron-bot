@@ -25,6 +25,8 @@ const INVITE_URL = 'https://discord.gg/NptArpkjK';
 const REMOTE_MODE = botApi.isConfigured();
 
 function oauthCallbackUrl(req) {
+  const configured = String(process.env.DISCORD_REDIRECT_URI || '').trim();
+  if (configured) return configured;
   const host = req.get('host') || ('localhost:' + PORT);
   return req.protocol + '://' + host + '/auth/discord/callback';
 }
@@ -1557,7 +1559,7 @@ function requireAuth(req, res, next) {
   if (req.path.indexOf('/api/') === 0) {
     return res.status(401).json({ ok: false, error: 'Your dashboard session expired. Refresh the page and sign in again.' });
   }
-  return res.redirect('/login');
+  return res.redirect('/login?error=' + encodeURIComponent('Please sign in again. Your dashboard session was not saved or has expired.') + '&stage=no-session');
 }
 
 function requireMainAdmin(req, res, next) {
@@ -1605,6 +1607,35 @@ app.get('/auth/debug', function (req, res) {
   });
 });
 
+app.get('/auth/oauth-check', async function (req, res) {
+  const expected = crypto.createHmac('sha256', SESSION_SECRET).update('zyron-oauth-check-v1').digest('hex');
+  if (String(req.query.key || '') !== expected) return res.status(404).end();
+  if (!OAUTH_READY) return res.json({ ok: false, error: 'not-configured' });
+
+  try {
+    const body = new URLSearchParams({ grant_type: 'client_credentials', scope: 'identify' });
+    const response = await axios.post('https://discord.com/api/oauth2/token', body.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      auth: { username: CLIENT_ID, password: CLIENT_SECRET },
+      timeout: 15000
+    });
+    return res.json({
+      ok: true,
+      status: response.status,
+      hasAccessToken: Boolean(response.data && response.data.access_token),
+      callbackURL: oauthCallbackUrl(req)
+    });
+  } catch (err) {
+    const data = err && err.response && err.response.data;
+    return res.json({
+      ok: false,
+      status: err && err.response ? err.response.status : 0,
+      error: data && data.error ? data.error : 'request-failed',
+      callbackURL: oauthCallbackUrl(req)
+    });
+  }
+});
+
 app.get('/auth/session-check', function (req, res) {
   if (req.isAuthenticated && req.isAuthenticated()) {
     return res.status(403).json({ ok: false, error: 'Sign out before running the session check.' });
@@ -1637,28 +1668,36 @@ app.get('/auth/discord', function (req, res, next) {
   })(req, res, next);
 });
 
+function oauthErrorCode(err) {
+  const data = err && err.response && err.response.data;
+  if (data && data.error) return String(data.error);
+  if (err && err.code) return String(err.code);
+  return 'unknown';
+}
+
 app.get('/auth/discord/callback', function (req, res, next) {
   if (!OAUTH_READY) {
-    return res.redirect('/login?error=' + encodeURIComponent('Discord OAuth is not configured on this dashboard.'));
+    return res.redirect('/login?error=' + encodeURIComponent('Discord OAuth is not configured on this dashboard.') + '&stage=not-configured');
   }
 
   const callbackURL = oauthCallbackUrl(req);
   return passport.authenticate('discord', { callbackURL: callbackURL }, function (err, user) {
     if (err) {
-      console.error('Discord OAuth callback error:', err && err.message ? err.message : err);
+      const code = oauthErrorCode(err);
+      console.error('Discord OAuth callback error:', code);
       req.session = null;
-      return res.redirect('/login?error=' + encodeURIComponent('Discord could not complete the login. Please try again.'));
+      return res.redirect('/login?error=' + encodeURIComponent('Discord login failed (' + code + '). Please try again.') + '&stage=token-exchange');
     }
     if (!user) {
-      return res.redirect('/login?error=' + encodeURIComponent('Discord login was cancelled or denied.'));
+      return res.redirect('/login?error=' + encodeURIComponent('Discord login was cancelled or denied.') + '&stage=no-user');
     }
     return req.logIn(user, function (loginErr) {
       if (loginErr) {
         console.error('Discord session creation error:', loginErr && loginErr.message ? loginErr.message : loginErr);
         req.session = null;
-        return res.redirect('/login?error=' + encodeURIComponent('Could not create your dashboard session. Please try again.'));
+        return res.redirect('/login?error=' + encodeURIComponent('Could not create your dashboard session. Please try again.') + '&stage=session-create');
       }
-      return res.redirect('/dashboard');
+      return res.redirect('/dashboard?auth=callback-ok');
     });
   })(req, res, next);
 });
