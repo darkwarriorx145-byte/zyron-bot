@@ -2452,6 +2452,42 @@ app.get('/admin', requireMainAdmin, async function (req, res, next) {
       }
     }
 
+    let globalInviteReward = 25;
+    let globalInviteLeaderboard = [];
+    if (REMOTE_MODE) {
+      try {
+        const rewardData = await botApi.getGlobalInviteReward();
+        globalInviteReward = rewardData.globalInviteReward || 25;
+      } catch (err) {
+        console.error('Failed to fetch global invite reward:', err.message);
+      }
+      try {
+        const leaderboardData = await botApi.getGlobalInviteLeaderboard();
+        globalInviteLeaderboard = leaderboardData.leaderboard || [];
+      } catch (err) {
+        console.error('Failed to fetch global invite leaderboard:', err.message);
+      }
+    } else {
+      const local = readBotDB();
+      globalInviteReward = local.globalInviteReward || 25;
+      const invites = local.invites || {};
+      const leaderboard = [];
+      for (const guildId in invites) {
+        const guildInvites = invites[guildId];
+        for (const userId in guildInvites) {
+          const stats = guildInvites[userId];
+          const existing = leaderboard.find(function (entry) { return entry.userId === userId; });
+          if (existing) {
+            existing.amount += stats.total || 0;
+          } else {
+            leaderboard.push({ userId, amount: stats.total || 0 });
+          }
+        }
+      }
+      leaderboard.sort(function (a, b) { return b.amount - a.amount; });
+      globalInviteLeaderboard = leaderboard.slice(0, 50);
+    }
+
     const servers = Object.keys(ids).map(function (id) {
       const info = botMap[id] || {};
       const source = REMOTE_MODE
@@ -2496,11 +2532,32 @@ app.get('/admin', requireMainAdmin, async function (req, res, next) {
         }).length
       },
       coOwners: coOwners,
+      globalInviteReward: globalInviteReward,
+      globalInviteLeaderboard: globalInviteLeaderboard,
       dbPath: REMOTE_MODE ? ('Bot API: ' + botApi.baseUrl()) : DB_PATH,
       botConfigured: REMOTE_MODE ? true : Boolean(process.env.BOT_TOKEN || process.env.DISCORD_TOKEN)
     });
   } catch (err) {
     return next(err);
+  }
+});
+
+app.post('/admin/invite-reward', requireMainAdmin, async function (req, res) {
+  const reward = parseInt((req.body || {}).reward, 10);
+  if (isNaN(reward) || reward < 0 || reward > 10000) {
+    return res.status(400).json({ ok: false, error: 'Reward must be a number between 0 and 10000.' });
+  }
+  try {
+    if (REMOTE_MODE) {
+      await botApi.setGlobalInviteReward(reward);
+    } else {
+      const settings = readBotDB();
+      settings.globalInviteReward = reward;
+      writeBotDB(settings);
+    }
+    return res.json({ ok: true, globalInviteReward: reward });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
   }
 });
 

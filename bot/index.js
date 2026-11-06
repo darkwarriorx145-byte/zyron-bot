@@ -1953,6 +1953,14 @@ client.on('interactionCreate', async function (interaction) {
       return;
     }
 
+    if (commandName === 'petro') {
+      const command = client.commands.get('petro');
+      if (command && typeof command.handleInteraction === 'function') {
+        return await command.handleInteraction(client, interaction);
+      }
+      return;
+    }
+
     const command = client.commands.get(commandName);
     if (!command || typeof command.handleInteraction !== 'function') return;
     await command.handleInteraction(client, interaction);

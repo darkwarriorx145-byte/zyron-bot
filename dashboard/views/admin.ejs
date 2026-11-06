@@ -153,6 +153,72 @@
       <section class="card">
         <div class="card-head">
           <div class="card-title">
+            <span class="card-icon"><%- include('partials/icon', { name: 'gift', size: 18 }) %></span>
+            <div>
+              <h2>Invite Reward Setup</h2>
+              <p class="muted">Configure global invite rewards and view top inviters across all servers.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel-grid two">
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'settings', size: 18 }) %></span>
+                <div>
+                  <h3>Global Invite Reward</h3>
+                  <p class="muted">Default coins given for each valid invite. Overridden by per-server settings.</p>
+                </div>
+              </div>
+            </div>
+            <label class="field">
+              <span>Default Invite Reward (Coins)</span>
+              <input class="input" id="globalInviteReward" type="number" min="0" max="10000" value="<%= globalInviteReward %>" placeholder="25">
+            </label>
+            <div class="row-actions">
+              <button type="button" class="btn btn-primary btn-sm" data-action="save-global-invite-reward">Save Global Reward</button>
+            </div>
+          </div>
+
+          <div class="card glass">
+            <div class="card-head">
+              <div class="card-title">
+                <span class="card-icon"><%- include('partials/icon', { name: 'trophy', size: 18 }) %></span>
+                <div>
+                  <h3>Top Inviters (Global)</h3>
+                  <p class="muted">Combined across all servers where the bot is present.</p>
+                </div>
+              </div>
+            </div>
+            <div class="data-list" id="globalInviteLeaderboard">
+              <% if (globalInviteLeaderboard && globalInviteLeaderboard.length) { %>
+                <% globalInviteLeaderboard.forEach(function (entry, i) { %>
+                  <div class="data-row">
+                    <span><strong>#<%= i + 1 %></strong> <code><%= entry.userId %></code> — <%= entry.amount %> invites</span>
+                  </div>
+                <% }); %>
+              <% } else { %>
+                <div class="empty-inline">No invite data available.</div>
+              <% } %>
+            </div>
+            <div class="row-actions">
+              <button type="button" class="btn btn-ghost btn-sm" data-action="refresh-global-invite-leaderboard">Refresh</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="notice glass">
+          <span class="notice-icon"><%- include('partials/icon', { name: 'info', size: 18 }) %></span>
+          <div>
+            <strong>Per-server override:</strong> Each server can set its own invite reward with <code>.config economy invite <amount></code> or in the Server Settings panel. The global default applies only to servers that haven't customized it.
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
             <span class="card-icon"><%- include('partials/icon', { name: 'puzzle', size: 18 }) %></span>
             <div>
               <h2>System</h2>
@@ -191,5 +257,66 @@
       <a href="<%= brand.invite %>" target="_blank" rel="noopener">Support</a>
     </footer>
   </main>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var saveBtn = document.querySelector('[data-action="save-global-invite-reward"]');
+      if (saveBtn) {
+        saveBtn.addEventListener('click', function () {
+          var input = document.getElementById('globalInviteReward');
+          var reward = parseInt(input.value, 10);
+          if (isNaN(reward) || reward < 0 || reward > 10000) {
+            alert('Reward must be a number between 0 and 10000.');
+            return;
+          }
+          saveBtn.disabled = true;
+          saveBtn.textContent = 'Saving...';
+          fetch('/admin/invite-reward', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ reward: reward })
+          }).then(function (res) { return res.json(); })
+            .then(function (data) {
+              if (data.ok) {
+                alert('Global invite reward saved to ' + data.globalInviteReward + ' coins.');
+                input.value = data.globalInviteReward;
+              } else {
+                alert('Failed: ' + (data.error || 'Unknown error'));
+              }
+            })
+            .catch(function (err) { alert('Error: ' + err.message); })
+            .finally(function () {
+              saveBtn.disabled = false;
+              saveBtn.textContent = 'Save Global Reward';
+            });
+        });
+      }
+
+      var refreshBtn = document.querySelector('[data-action="refresh-global-invite-leaderboard"]');
+      if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+          refreshBtn.disabled = true;
+          refreshBtn.textContent = 'Refreshing...';
+          fetch('/admin', { method: 'GET', headers: { 'Accept': 'text/html' } })
+            .then(function (res) { return res.text(); })
+            .then(function (html) {
+              var parser = new DOMParser();
+              var doc = parser.parseFromString(html, 'text/html');
+              var newList = doc.getElementById('globalInviteLeaderboard');
+              var oldList = document.getElementById('globalInviteLeaderboard');
+              if (newList && oldList) {
+                oldList.innerHTML = newList.innerHTML;
+              }
+              alert('Leaderboard refreshed.');
+            })
+            .catch(function (err) { alert('Error: ' + err.message); })
+            .finally(function () {
+              refreshBtn.disabled = false;
+              refreshBtn.textContent = 'Refresh';
+            });
+        });
+      }
+    });
+  </script>
 </body>
 </html>

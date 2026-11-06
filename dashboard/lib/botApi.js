@@ -232,6 +232,18 @@ async function createIntegration(guildId, integration) {
   return request('POST', '/api/guilds/' + encodeURIComponent(guildId) + '/integrations', { integration: integration || {} });
 }
 
+async function getGlobalInviteReward() {
+  return request('GET', '/api/invite/global-reward');
+}
+
+async function setGlobalInviteReward(reward) {
+  return request('POST', '/api/invite/global-reward', { reward: reward });
+}
+
+async function getGlobalInviteLeaderboard() {
+  return request('GET', '/api/invite/global-leaderboard');
+}
+
 async function updateIntegration(guildId, integrationId, integration) {
   return request('PATCH', '/api/guilds/' + encodeURIComponent(guildId) + '/integrations/' + encodeURIComponent(integrationId), { integration: integration || {} });
 }
@@ -336,6 +348,9 @@ module.exports = {
   updateIntegration: updateIntegration,
   deleteIntegration: deleteIntegration,
   testIntegration: testIntegration,
+  getGlobalInviteReward: getGlobalInviteReward,
+  setGlobalInviteReward: setGlobalInviteReward,
+  getGlobalInviteLeaderboard: getGlobalInviteLeaderboard,
   heartbeat: heartbeat,
   test: test
 };
