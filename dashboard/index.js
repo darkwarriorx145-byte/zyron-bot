@@ -23,6 +23,8 @@ const OAUTH_READY = Boolean(CLIENT_ID && CLIENT_SECRET);
 const SECURE_COOKIES = String(process.env.DASHBOARD_SECURE_COOKIES || '').toLowerCase() === 'true';
 const INVITE_URL = 'https://discord.gg/NptArpkjK';
 const REMOTE_MODE = botApi.isConfigured();
+const OAUTH_GUILD_SEED_MS = 5 * 60 * 1000;
+const oauthGuildSeeds = new Map();
 
 function oauthCallbackUrl(req) {
   const configured = String(process.env.DISCORD_REDIRECT_URI || '').trim();
@@ -1357,12 +1359,32 @@ function pathNeedsDiscordGuilds(pathname) {
     pathname.indexOf('/api/ai/') === 0;
 }
 
-async function fetchDiscordUserGuilds(accessToken) {
-  const response = await axios.get('https://discord.com/api/users/@me/guilds', {
-    headers: { Authorization: 'Bearer ' + accessToken },
-    timeout: 10000
+function wait(ms) {
+  return new Promise(function (resolve) {
+    setTimeout(resolve, ms);
   });
-  return Array.isArray(response.data) ? response.data : [];
+}
+
+async function fetchDiscordUserGuilds(accessToken, attempt) {
+  const tries = Number(attempt) || 0;
+  try {
+    const response = await axios.get('https://discord.com/api/users/@me/guilds', {
+      headers: { Authorization: 'Bearer ' + accessToken },
+      timeout: 10000
+    });
+    return Array.isArray(response.data) ? response.data : [];
+  } catch (err) {
+    const status = err && err.response && err.response.status;
+    const data = err && err.response && err.response.data;
+    const retryAfter = Number(data && data.retry_after);
+    if (status === 429 && tries < 2) {
+      const seconds = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 0.5;
+      const waitMs = Math.max(250, Math.min(3000, Math.ceil(seconds * 1000)));
+      await wait(waitMs);
+      return fetchDiscordUserGuilds(accessToken, tries + 1);
+    }
+    throw err;
+  }
 }
 
 passport.serializeUser(function (user, done) {
@@ -1415,6 +1437,12 @@ if (OAUTH_READY) {
   }, function (accessToken, refreshToken, profile, done) {
     Object.defineProperty(profile, 'accessToken', { value: accessToken, enumerable: false, configurable: true });
     Object.defineProperty(profile, 'refreshToken', { value: refreshToken || null, enumerable: false, configurable: true });
+    if (profile && profile.id && Array.isArray(profile.guilds)) {
+      oauthGuildSeeds.set(String(profile.id), {
+        guilds: profile.guilds,
+        expires: Date.now() + OAUTH_GUILD_SEED_MS
+      });
+    }
     return done(null, profile);
   }));
 }
@@ -1489,6 +1517,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 const discordGuildCache = new Map();
+const discordGuildFetches = new Map();
 const DISCORD_GUILD_CACHE_MS = 5 * 60 * 1000;
 
 app.use(async function (req, res, next) {
@@ -1501,14 +1530,25 @@ app.use(async function (req, res, next) {
     return discordSessionExpired(req, res);
   }
 
-  const cached = discordGuildCache.get(req.user.id);
+  const cached = discordGuildCache.get(req.user.id) || oauthGuildSeeds.get(String(req.user.id));
   if (cached && cached.expires > Date.now()) {
     req.user.guilds = cached.guilds;
     return next();
   }
 
   try {
-    const guilds = await fetchDiscordUserGuilds(req.user.accessToken);
+    let pending = discordGuildFetches.get(req.user.id);
+    if (!pending) {
+      pending = fetchDiscordUserGuilds(req.user.accessToken).then(function (guilds) {
+        discordGuildFetches.delete(req.user.id);
+        return guilds;
+      }, function (err) {
+        discordGuildFetches.delete(req.user.id);
+        throw err;
+      });
+      discordGuildFetches.set(req.user.id, pending);
+    }
+    const guilds = await pending;
     discordGuildCache.set(req.user.id, {
       guilds: guilds,
       expires: Date.now() + DISCORD_GUILD_CACHE_MS
@@ -1524,6 +1564,10 @@ app.use(async function (req, res, next) {
     if (cached && Array.isArray(cached.guilds)) {
       req.user.guilds = cached.guilds;
       return next();
+    }
+    if (status === 429) {
+      err.status = 429;
+      err.userMessage = 'Discord is rate limiting the dashboard right now. Please wait a few seconds and try again.';
     }
     return next(err);
   }
@@ -2506,18 +2550,43 @@ app.use(function (req, res) {
   });
 });
 
+function summarizeDashboardError(err) {
+  if (!err) return { message: 'Unknown error' };
+  const response = err.response;
+  const status = Number(err.status || err.statusCode || (response && response.status)) || 0;
+  const code = err.code || (response && response.data && response.data.code) || '';
+  let path = '';
+  if (err.config && err.config.url) {
+    try {
+      path = new URL(err.config.url, 'http://localhost').pathname;
+    } catch (urlErr) {
+      path = String(err.config.url).split('?')[0];
+    }
+  }
+  return {
+    message: err.message || String(err),
+    status: status || undefined,
+    code: code || undefined,
+    method: err.config && err.config.method ? err.config.method : undefined,
+    path: path || undefined
+  };
+}
+
 app.use(function (err, req, res, next) {
-  console.error('Dashboard error:', err);
+  console.error('Dashboard error:', JSON.stringify(summarizeDashboardError(err)));
+  const status = Number(err.status || err.statusCode || (err.response && err.response.status)) || 500;
   if (req.path.indexOf('/api/') === 0) {
-    const status = Number(err.status || err.statusCode) || 500;
     let message = 'The dashboard could not complete that request.';
     if (err.type === 'entity.parse.failed') message = 'The request body was not valid JSON.';
     else if (err.type === 'entity.too.large') message = 'That request is too large to save.';
     else if (status < 500) message = String(err.message || message);
     return res.status(status).json({ ok: false, error: message });
   }
-  return res.status(500).render('error', {
-    message: 'Something went wrong on the dashboard. Check the console for details.'
+  const message = err.userMessage || (status === 429
+    ? 'Discord is rate limiting the dashboard right now. Please wait a few seconds and try again.'
+    : 'Something went wrong on the dashboard. Please return to servers and try again.');
+  return res.status(status >= 400 && status < 600 ? status : 500).render('error', {
+    message: message
   });
 });
 
