@@ -33,15 +33,31 @@ function isEnabled() {
 
 function getModel(settings) {
   if (settings && settings.aiModel) return String(settings.aiModel);
-  return envValue('OPENROUTER_MODEL', 'openrouter/auto');
+  return envValue('OPENROUTER_MODEL', 'nvidia/nemotron-3-ultra-550b-a55b:free');
 }
 
 function getFallbackModel() {
-  return envValue('OPENROUTER_FALLBACK_MODEL', 'poolside/laguna-s-2.1:free');
+  return envValue('OPENROUTER_FALLBACK_MODEL', 'recursive/flint-v1.0:free');
 }
 
 function getFallbackModel2() {
   return envValue('OPENROUTER_FALLBACK_MODEL_2', 'openrouter/free');
+}
+
+function getModelChain(primary) {
+  const chain = [];
+  [
+    primary,
+    getFallbackModel(),
+    getFallbackModel2(),
+    'nvidia/nemotron-3-ultra-550b-a55b:free',
+    'recursive/flint-v1.0:free',
+    'meta-llama/llama-3.3-70b-instruct:free'
+  ].forEach(function (item) {
+    const value = String(item || '').trim();
+    if (value && chain.indexOf(value) === -1) chain.push(value);
+  });
+  return chain;
 }
 
 function getConfidence(settings) {
@@ -61,7 +77,7 @@ function status() {
   return {
     configured: isConfigured(),
     enabled: isEnabled(),
-    model: envValue('OPENROUTER_MODEL', 'openrouter/auto'),
+    model: envValue('OPENROUTER_MODEL', 'nvidia/nemotron-3-ultra-550b-a55b:free'),
     fallbackModel: getFallbackModel(),
     timeoutMs: getTimeout(),
     confidence: getConfidence(null),
@@ -348,10 +364,7 @@ async function runAnalysis(model, system, user) {
     return { ok: false, status: 0, error: 'AI is not configured. Add OPENROUTER_API_KEY to .env.', latency: 0 };
   }
 
-  const chain = [];
-  [model, getFallbackModel(), getFallbackModel2()].forEach(function (item) {
-    if (item && chain.indexOf(item) === -1) chain.push(item);
-  });
+  const chain = getModelChain(model);
 
   let last = null;
 
@@ -729,11 +742,7 @@ async function chat(settings, system, user) {
     };
   }
 
-  const models = [];
-  [getModel(settings), getFallbackModel(), getFallbackModel2()].forEach(function (model) {
-    const value = String(model || '').trim();
-    if (value && models.indexOf(value) === -1) models.push(value);
-  });
+  const models = getModelChain(getModel(settings));
 
   let last = null;
   for (let i = 0; i < models.length; i++) {

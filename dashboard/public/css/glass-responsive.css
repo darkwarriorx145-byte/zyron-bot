@@ -36,7 +36,7 @@
   .nav-pill { display: none; }
   .sidebar-user { margin-left: auto; padding: 5px; background: transparent; border: 0; }
   .sidebar-user-copy { display: none; }
-  .main { padding: 82px 16px 96px; max-width: none; }
+  .main { padding: 24px 16px 96px; max-width: none; }
   .home-topbar, .server-topbar, .panel-head { flex-direction: column; align-items: flex-start; gap: 14px; }
   .topbar-actions { justify-content: flex-start; }
   .home-hero { padding: 24px; }
@@ -56,7 +56,7 @@
 @media (max-width: 620px) {
   .notch { top: 8px; padding: 6px 11px; font-size: 10px; gap: 6px; }
   .notch-meta, .notch-divider { display: none; }
-  .main { padding: 74px 12px 92px; }
+  .main { padding: 18px 12px 92px; }
   .sidebar { margin: 8px; }
   .home-topbar h1, .server-topbar h1 { font-size: 25px; }
   .hero-copy h2 { font-size: 32px; }
@@ -67,6 +67,10 @@
   .server-grid, .feature-card-grid { grid-template-columns: 1fr; }
   .field-grid.two, .row-grid { grid-template-columns: 1fr; }
   .row-grid .span-2, .row-grid .span-3 { grid-column: auto; }
+  .profile-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-staff-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profile-staff-head { flex-wrap: wrap; }
+  .staff-advice-actions .input-compact { flex-basis: 100%; }
   .policy-grid { grid-template-columns: 1fr; }
   .panel-head h2 { font-size: 24px; }
   .card { padding: 16px; border-radius: 20px; }

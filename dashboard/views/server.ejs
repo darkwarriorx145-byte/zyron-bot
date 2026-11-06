@@ -211,7 +211,7 @@
             </span>
           </div>
 
-          <div class="stats-grid">
+          <div class="stats-grid profile-stats">
             <div class="stat-card glass"><span>Messages</span><strong><%= viewerProfile.messages %></strong></div>
             <div class="stat-card glass"><span>Voice minutes</span><strong><%= viewerProfile.voiceMinutes %></strong></div>
             <div class="stat-card glass"><span>Invites</span><strong><%= viewerProfile.invites %></strong></div>
@@ -219,6 +219,26 @@
             <div class="stat-card glass"><span>Quest streak</span><strong><%= viewerProfile.streak %> days</strong></div>
             <div class="stat-card glass"><span>Quests done</span><strong><%= viewerProfile.questsCompleted %></strong></div>
           </div>
+
+          <% if (viewerProfile.staff) { %>
+            <div class="profile-staff-card glass">
+              <div class="profile-staff-head">
+                <span class="card-icon"><%- include('partials/icon', { name: 'users', size: 18 }) %></span>
+                <span>
+                  <strong>Staff activity</strong>
+                  <small>Your tracked staff work in this server.</small>
+                </span>
+                <span class="badge <%= settings.staffOpsEnabled ? 'badge-success' : 'badge-muted' %>"><%= settings.staffOpsEnabled ? 'Tracking live' : 'Tracking paused' %></span>
+              </div>
+              <div class="profile-staff-stats">
+                <div class="stat-card glass"><span>Staff messages</span><strong><%= viewerProfile.staff.messages || 0 %></strong></div>
+                <div class="stat-card glass"><span>Ticket replies</span><strong><%= viewerProfile.staff.messagesInTickets || 0 %></strong></div>
+                <div class="stat-card glass"><span>Tickets closed</span><strong><%= viewerProfile.staff.ticketsClosed || 0 %></strong></div>
+                <div class="stat-card glass"><span>Mod actions</span><strong><%= viewerProfile.staff.moderationActions || 0 %></strong></div>
+                <div class="stat-card glass"><span>Commands used</span><strong><%= viewerProfile.staff.commandsUsed || 0 %></strong></div>
+              </div>
+            </div>
+          <% } %>
 
           <div class="panel-grid two-one">
             <div class="card glass">
@@ -3003,7 +3023,7 @@
             title.textContent = data.ok ? ((data.verdict || 'uncertain') + ' · ' + (data.action || 'none')) : 'AI test failed';
             var reason = document.createElement('p');
             reason.textContent = data.ok
-              ? 'Confidence ' + Math.round(Number(data.confidence || 0) * 100) + '% · ' + (data.reason || 'No reason returned.')
+              ? 'Confidence ' + Math.round(Number(data.confidence || 0) * 100) + '% · ' + (data.reason || 'No reason returned.') + (data.model ? ' (' + data.model + ')' : '')
               : (data.error || 'No response.');
             card.appendChild(title);
             card.appendChild(reason);

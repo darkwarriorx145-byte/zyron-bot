@@ -118,8 +118,8 @@ The AI is a second opinion, not the only line of defense.
 
 Default model chain:
 
-1. `openrouter/auto` (needs credits)
-2. `poolside/laguna-s-2.1:free`
+1. `nvidia/nemotron-3-ultra-550b-a55b:free`
+2. `recursive/flint-v1.0:free`
 3. `openrouter/free`
 
 ## Features

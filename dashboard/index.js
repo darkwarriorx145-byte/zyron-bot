@@ -4,6 +4,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const express = require('express');
 const cookieSession = require('cookie-session');
 const fs = require('fs');
+const crypto = require('crypto');
 const passport = require('passport');
 const DiscordStrategy = require('passport-discord').Strategy;
 const axios = require('axios');
@@ -13,6 +14,7 @@ const app = express();
 
 const PORT = process.env.DASHBOARD_PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'ZyronDashboardSecretKey2026';
+const SESSION_CRYPTO_KEY = crypto.createHash('sha256').update(String(SESSION_SECRET)).digest();
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
 const CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || ('http://localhost:' + PORT + '/auth/discord/callback');
@@ -151,6 +153,62 @@ const FEATURE_LIBRARY = [
     description: 'A separate coin economy for every server with daily and invite rewards you control.',
     tab: 'economy',
     badge: 'Per-server'
+  },
+  {
+    key: 'joingate',
+    icon: 'shield-check',
+    title: 'Join Gate 2.0',
+    description: 'Scores every new member, quarantines risky accounts, runs a private challenge and gives staff one-click release or kick controls.',
+    tab: 'joingate',
+    badge: 'Risk scored'
+  },
+  {
+    key: 'progression',
+    icon: 'star',
+    title: 'Community Progression',
+    description: 'Daily and weekly quests, streaks and twelve collectible badges that appear on every member profile.',
+    tab: 'progression',
+    badge: 'Badges + quests'
+  },
+  {
+    key: 'levels',
+    icon: 'sparkles',
+    title: 'Levels & XP',
+    description: 'Message and voice XP with dashboard-tuned rates, level-up channels and automatic role rewards.',
+    tab: 'levels',
+    badge: 'Role rewards'
+  },
+  {
+    key: 'shop',
+    icon: 'gift',
+    title: 'Coin Shop',
+    description: 'Admin-controlled items, prices, stock limits and role rewards, paid with each server’s own coins.',
+    tab: 'shop',
+    badge: 'Admin stock'
+  },
+  {
+    key: 'staffops',
+    icon: 'users',
+    title: 'Staff Operations',
+    description: 'Tracks staff messages, voice, commands, tickets and moderation, then recommends who to promote, coach or demote.',
+    tab: 'staffops',
+    badge: 'Promotion advice'
+  },
+  {
+    key: 'health',
+    icon: 'activity',
+    title: 'Server Health',
+    description: 'Automatic audits report dangerous role permissions and category-grouped risks in the dashboard and in Discord.',
+    tab: 'health',
+    badge: 'Auto audits'
+  },
+  {
+    key: 'integrations',
+    icon: 'link',
+    title: 'Integrations',
+    description: 'Connect Pterodactyl, Minecraft, hosting panels, status pages, communities and more with per-service checks.',
+    tab: 'integrations',
+    badge: '11+ services'
   }
 ];
 
@@ -725,7 +783,9 @@ async function loadUserProfile(guildId, userId) {
   if (REMOTE_MODE) {
     try {
       const result = await botApi.getUserProfile(guildId, userId);
-      return result.profile || null;
+      if (result && result.profile) {
+        return Object.assign({}, result.profile, { staff: result.staff || null });
+      }
     } catch (err) {
       console.warn('Bot API profile lookup failed; using local bot DB:', err.message);
     }
@@ -738,6 +798,7 @@ async function loadUserProfile(guildId, userId) {
   const coins = data.coins && data.coins[guildId] ? data.coins[guildId][userId] || 0 : 0;
   const messages = data.messages && data.messages[guildId] ? data.messages[guildId][userId] || 0 : 0;
   const warnings = data.warnings && data.warnings[guildId + '_' + userId] ? data.warnings[guildId + '_' + userId] : [];
+  const staffRecord = data.staffMetrics && data.staffMetrics[guildId] ? data.staffMetrics[guildId][userId] || null : null;
   const badges = Object.keys(progression.badges || {}).map(function (badgeId) {
     return {
       id: badgeId,
@@ -780,7 +841,40 @@ async function loadUserProfile(guildId, userId) {
     badgeCount: badges.length,
     totalBadges: badges.length,
     quests: [],
-    questsEnabled: false
+    questsEnabled: false,
+    staff: staffRecord
+  };
+}
+
+function emptyViewerProfile(user) {
+  return {
+    userId: user && user.id ? user.id : '',
+    username: user && user.displayName ? user.displayName : null,
+    displayName: user && user.displayName ? user.displayName : null,
+    avatar: null,
+    joinedAt: null,
+    level: 0,
+    totalXp: 0,
+    rank: 1,
+    totalRanked: 0,
+    progress: 0,
+    needed: 100,
+    coins: 0,
+    coinsEarned: 0,
+    messages: 0,
+    voiceMinutes: 0,
+    invites: 0,
+    purchases: 0,
+    questsCompleted: 0,
+    streak: 0,
+    vouches: 0,
+    warnings: 0,
+    badges: [],
+    badgeCount: 0,
+    totalBadges: 12,
+    quests: [],
+    questsEnabled: false,
+    staff: null
   };
 }
 
@@ -1091,6 +1185,8 @@ async function sendDiscordPanel(channelId, payload) {
   return response.data || {};
 }
 
+const aiModelCooldowns = new Map();
+
 async function callOpenRouter(model, system, user, jsonMode) {
   const key = process.env.OPENROUTER_API_KEY || '';
   if (!key) return { ok: false, status: 0, error: 'OPENROUTER_API_KEY is not set on the dashboard.' };
@@ -1103,7 +1199,7 @@ async function callOpenRouter(model, system, user, jsonMode) {
         { role: 'user', content: user }
       ],
       temperature: 0,
-      max_tokens: 240
+      max_tokens: 300
     };
 
     if (jsonMode !== false) payload.response_format = { type: 'json_object' };
@@ -1154,8 +1250,11 @@ async function callOpenRouter(model, system, user, jsonMode) {
 
 async function testAi(text) {
   const chain = [
-    process.env.OPENROUTER_MODEL || 'openrouter/auto',
-    process.env.OPENROUTER_FALLBACK_MODEL || 'poolside/laguna-s-2.1:free',
+    process.env.OPENROUTER_MODEL || 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    process.env.OPENROUTER_FALLBACK_MODEL || 'recursive/flint-v1.0:free',
+    'nvidia/nemotron-3-ultra-550b-a55b:free',
+    'recursive/flint-v1.0:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
     process.env.OPENROUTER_FALLBACK_MODEL_2 || 'openrouter/free'
   ];
 
@@ -1176,10 +1275,15 @@ async function testAi(text) {
 
   const tried = [];
   let lastError = '';
+  let skipped = 0;
 
   for (let i = 0; i < chain.length; i++) {
     const model = chain[i];
     if (!model || tried.indexOf(model) !== -1) continue;
+    if (aiModelCooldowns.has(model) && aiModelCooldowns.get(model) > Date.now()) {
+      skipped += 1;
+      continue;
+    }
     tried.push(model);
 
     let result = await callOpenRouter(model, system, user, true);
@@ -1188,50 +1292,116 @@ async function testAi(text) {
       result = await callOpenRouter(model, system, user, false);
     }
 
-    if (result.ok) return result;
+    if (result.ok) {
+      result.tried = tried;
+      return result;
+    }
     if (result.error) lastError = result.error;
+
+    if (result.status === 402 || result.status === 404 || result.status === 429) {
+      const waitMs = result.status === 429 ? 60 * 1000 : 10 * 60 * 1000;
+      aiModelCooldowns.set(model, Date.now() + waitMs);
+    }
   }
 
   return {
     ok: false,
-    error: lastError || 'No AI model answered. Check the OpenRouter key and credits.'
+    tried: tried,
+    error: skipped > 0 && tried.length === 0
+      ? 'AI providers are cooling down after recent errors. Try again in a minute.'
+      : (lastError || 'No AI model answered. Check the OpenRouter key and credits.')
   };
 }
 
-passport.serializeUser(function (user, done) {
-  const compact = manageableGuilds(user).map(function (guild) {
-    return {
-      id: guild.id,
-      name: guild.name,
-      icon: guild.icon || null,
-      owner: guild.owner === true,
-      permissions: String(guild.permissions || '0')
-    };
-  });
-
-  let guilds = compact;
-  if (JSON.stringify(compact).length > 3200) {
-    guilds = compact.map(function (guild) {
-      return {
-        id: guild.id,
-        owner: guild.owner,
-        permissions: guild.permissions
-      };
-    });
+function encryptSessionValue(value) {
+  if (!value) return null;
+  try {
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', SESSION_CRYPTO_KEY, iv);
+    const encrypted = Buffer.concat([cipher.update(String(value), 'utf8'), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    return iv.toString('base64url') + '.' + tag.toString('base64url') + '.' + encrypted.toString('base64url');
+  } catch (err) {
+    return null;
   }
+}
 
+function decryptSessionValue(value) {
+  if (!value || typeof value !== 'string') return null;
+  const parts = value.split('.');
+  if (parts.length !== 3) return null;
+  try {
+    const decipher = crypto.createDecipheriv('aes-256-gcm', SESSION_CRYPTO_KEY, Buffer.from(parts[0], 'base64url'));
+    decipher.setAuthTag(Buffer.from(parts[1], 'base64url'));
+    const decrypted = Buffer.concat([decipher.update(Buffer.from(parts[2], 'base64url')), decipher.final()]);
+    return decrypted.toString('utf8');
+  } catch (err) {
+    return null;
+  }
+}
+
+function discordSessionExpired(req, res) {
+  if (req.path.indexOf('/api/') === 0) {
+    return res.status(401).json({ ok: false, error: 'Your Discord session expired. Please sign in again.' });
+  }
+  return res.redirect('/login?error=' + encodeURIComponent('Your Discord session expired. Please sign in again.'));
+}
+
+function pathNeedsDiscordGuilds(pathname) {
+  return pathname === '/dashboard' ||
+    pathname === '/admin' ||
+    pathname.indexOf('/server/') === 0 ||
+    pathname.indexOf('/api/server/') === 0 ||
+    pathname.indexOf('/api/ai/') === 0;
+}
+
+async function fetchDiscordUserGuilds(accessToken) {
+  const response = await axios.get('https://discord.com/api/users/@me/guilds', {
+    headers: { Authorization: 'Bearer ' + accessToken },
+    timeout: 10000
+  });
+  return Array.isArray(response.data) ? response.data : [];
+}
+
+passport.serializeUser(function (user, done) {
+  if (!user || !user.id) return done(null, null);
+  // Keep the session cookie tiny. Storing every manageable guild here can exceed
+  // the browser's ~4 KB cookie limit and cause an OAuth login loop.
   done(null, {
     id: user.id,
     username: user.username,
     global_name: user.global_name || null,
     discriminator: user.discriminator || '0',
     avatar: user.avatar || null,
-    guilds: guilds
+    accessTokenEnc: encryptSessionValue(user.accessToken),
+    refreshTokenEnc: encryptSessionValue(user.refreshToken)
   });
 });
 
 passport.deserializeUser(function (user, done) {
-  done(null, user);
+  if (!user || !user.id) return done(null, null);
+
+  const plain = {
+    id: user.id,
+    username: user.username,
+    global_name: user.global_name || null,
+    discriminator: user.discriminator || '0',
+    avatar: user.avatar || null
+  };
+
+  const accessToken = decryptSessionValue(user.accessTokenEnc);
+  const refreshToken = decryptSessionValue(user.refreshTokenEnc);
+  if (accessToken) {
+    Object.defineProperty(plain, 'accessToken', { value: accessToken, enumerable: false, configurable: true });
+  }
+  if (refreshToken) {
+    Object.defineProperty(plain, 'refreshToken', { value: refreshToken, enumerable: false, configurable: true });
+  }
+  if (!accessToken && Array.isArray(user.guilds) && user.guilds.length > 0) {
+    plain.guilds = user.guilds;
+  }
+
+  done(null, plain);
 });
 
 if (OAUTH_READY) {
@@ -1241,6 +1411,8 @@ if (OAUTH_READY) {
     callbackURL: REDIRECT_URI,
     scope: ['identify', 'guilds']
   }, function (accessToken, refreshToken, profile, done) {
+    Object.defineProperty(profile, 'accessToken', { value: accessToken, enumerable: false, configurable: true });
+    Object.defineProperty(profile, 'refreshToken', { value: refreshToken || null, enumerable: false, configurable: true });
     return done(null, profile);
   }));
 }
@@ -1310,6 +1482,47 @@ app.use(function (req, res, next) {
 app.use(passport.initialize());
 app.use(passport.session());
 
+const discordGuildCache = new Map();
+const DISCORD_GUILD_CACHE_MS = 5 * 60 * 1000;
+
+app.use(async function (req, res, next) {
+  if (!pathNeedsDiscordGuilds(req.path)) return next();
+  if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) return next();
+
+  if (!req.user.accessToken) {
+    if (Array.isArray(req.user.guilds) && req.user.guilds.length > 0) return next();
+    req.session = null;
+    return discordSessionExpired(req, res);
+  }
+
+  const cached = discordGuildCache.get(req.user.id);
+  if (cached && cached.expires > Date.now()) {
+    req.user.guilds = cached.guilds;
+    return next();
+  }
+
+  try {
+    const guilds = await fetchDiscordUserGuilds(req.user.accessToken);
+    discordGuildCache.set(req.user.id, {
+      guilds: guilds,
+      expires: Date.now() + DISCORD_GUILD_CACHE_MS
+    });
+    req.user.guilds = guilds;
+    return next();
+  } catch (err) {
+    const status = err && err.response && err.response.status;
+    if (status === 401) {
+      req.session = null;
+      return discordSessionExpired(req, res);
+    }
+    if (cached && Array.isArray(cached.guilds)) {
+      req.user.guilds = cached.guilds;
+      return next();
+    }
+    return next(err);
+  }
+});
+
 app.use(function (req, res, next) {
   res.locals.user = req.user || null;
   res.locals.currentPath = req.path;
@@ -1337,12 +1550,23 @@ function requireAuth(req, res, next) {
     }
     return next();
   }
+  if (req.path.indexOf('/api/') === 0) {
+    return res.status(401).json({ ok: false, error: 'Your dashboard session expired. Refresh the page and sign in again.' });
+  }
   return res.redirect('/login');
 }
 
 function requireMainAdmin(req, res, next) {
-  if (!req.isAuthenticated || !req.isAuthenticated()) return res.redirect('/login');
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    if (req.path.indexOf('/api/') === 0) {
+      return res.status(401).json({ ok: false, error: 'Your dashboard session expired. Refresh the page and sign in again.' });
+    }
+    return res.redirect('/login');
+  }
   if (!isMainAdmin(req.user)) {
+    if (req.path.indexOf('/api/') === 0) {
+      return res.status(403).json({ ok: false, error: 'You do not have access to the main admin panel.' });
+    }
     return res.status(403).render('error', {
       message: 'You do not have access to the main admin panel.'
     });
@@ -1371,7 +1595,9 @@ app.get('/auth/debug', function (req, res) {
     host: req.get('host') || null,
     protocol: req.protocol,
     callbackURL: oauthCallbackUrl(req),
-    configuredRedirect: REDIRECT_URI
+    configuredRedirect: REDIRECT_URI,
+    sessionMode: 'oauth-token-cookie',
+    guildSource: 'discord-oauth-cache'
   });
 });
 
@@ -1479,9 +1705,10 @@ app.get('/server/:id', requireAuth, async function (req, res, next) {
       console.warn('Could not load server activity:', err.message);
     }
 
-    let viewerProfile = null;
+    let viewerProfile = emptyViewerProfile(req.user);
     try {
-      viewerProfile = await loadUserProfile(serverId, req.user.id);
+      const loadedProfile = await loadUserProfile(serverId, req.user.id);
+      if (loadedProfile) viewerProfile = loadedProfile;
     } catch (err) {
       console.warn('Could not load viewer profile:', err.message);
     }
@@ -2176,6 +2403,9 @@ app.get('/healthz', function (req, res) {
 });
 
 app.use(function (req, res) {
+  if (req.path.indexOf('/api/') === 0) {
+    return res.status(404).json({ ok: false, error: 'That dashboard API route does not exist.' });
+  }
   return res.status(404).render('error', {
     message: 'Page not found. Use the dashboard to pick a server.'
   });
@@ -2183,6 +2413,14 @@ app.use(function (req, res) {
 
 app.use(function (err, req, res, next) {
   console.error('Dashboard error:', err);
+  if (req.path.indexOf('/api/') === 0) {
+    const status = Number(err.status || err.statusCode) || 500;
+    let message = 'The dashboard could not complete that request.';
+    if (err.type === 'entity.parse.failed') message = 'The request body was not valid JSON.';
+    else if (err.type === 'entity.too.large') message = 'That request is too large to save.';
+    else if (status < 500) message = String(err.message || message);
+    return res.status(status).json({ ok: false, error: message });
+  }
   return res.status(500).render('error', {
     message: 'Something went wrong on the dashboard. Check the console for details.'
   });

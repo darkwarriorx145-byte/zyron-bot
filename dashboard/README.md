@@ -75,8 +75,8 @@ The OAuth scopes are `identify` and `guilds`. Zyron never sees a Discord passwor
 | `BOT_API_KEY` | For remote mode | The exact same long secret as `BOT_API_KEY` in the bot `.env`. |
 | `DASHBOARD_PUBLIC_URL` | Recommended | Public URL of this website. Local: `http://localhost:3000`. Netlify: `https://your-site.netlify.app`. |
 | `OPENROUTER_API_KEY` | No | Used by the AI test button. |
-| `OPENROUTER_MODEL` | No | Default model. `openrouter/auto` needs credits. |
-| `OPENROUTER_FALLBACK_MODEL` | No | First free fallback. Default `poolside/laguna-s-2.1:free`. |
+| `OPENROUTER_MODEL` | No | Default model. Default `nvidia/nemotron-3-ultra-550b-a55b:free`. |
+| `OPENROUTER_FALLBACK_MODEL` | No | First free fallback. Default `recursive/flint-v1.0:free`. |
 | `OPENROUTER_FALLBACK_MODEL_2` | No | Last free fallback. Default `openrouter/free`. |
 | `BOT_DB_PATH` | Local mode only | Path to the bot database. Default `../bot/data/database.json`. Not used when `BOT_API_URL` and `BOT_API_KEY` are set. |
 | `DASHBOARD_SECURE_COOKIES` | No | Set to `true` when served over HTTPS. Netlify always uses HTTPS, so set it to `true` there. |

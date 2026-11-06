@@ -72,12 +72,12 @@ Zyron can ask OpenRouter for a second opinion before it punishes someone. The AI
 5. Run .ai test <message> to classify a sample
 6. Use .ai on / .ai off per server
 7. Use .ai threshold 0.6 to tune confidence
-8. Use .ai model openrouter/auto or a specific model
+8. Use .ai model nvidia/nemotron-3-ultra-550b-a55b:free or a specific model
 
 Default chain:
 
-- openrouter/auto (needs credits)
-- poolside/laguna-s-2.1:free (fallback)
+- nvidia/nemotron-3-ultra-550b-a55b:free (primary)
+- recursive/flint-v1.0:free (fallback)
 - openrouter/free (last fallback)
 
 If the key has no credits and the free daily quota is used up, the AI returns a rate-limit error. Zyron then falls back to its deterministic rules. Mass anti-nuke actions and young-account raids still trigger instantly without waiting for the AI.
