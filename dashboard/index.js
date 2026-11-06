@@ -1346,7 +1346,7 @@ function discordSessionExpired(req, res) {
   if (req.path.indexOf('/api/') === 0) {
     return res.status(401).json({ ok: false, error: 'Your Discord session expired. Please sign in again.' });
   }
-  return res.redirect('/login?error=' + encodeURIComponent('Your Discord session expired. Please sign in again.'));
+  return res.redirect('/login?error=' + encodeURIComponent('Your Discord session expired. Please sign in again.') + '&stage=discord-session-rejected');
 }
 
 function pathNeedsDiscordGuilds(pathname) {
@@ -1697,9 +1697,19 @@ app.get('/auth/discord/callback', function (req, res, next) {
         req.session = null;
         return res.redirect('/login?error=' + encodeURIComponent('Could not create your dashboard session. Please try again.') + '&stage=session-create');
       }
-      return res.redirect('/dashboard?auth=callback-ok');
+      return res.redirect('/auth/complete');
     });
   })(req, res, next);
+});
+
+app.get('/auth/complete', function (req, res) {
+  if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+    return res.redirect('/login?error=' + encodeURIComponent('Discord login finished, but the dashboard session could not be read back. Please enable cookies for this site and try again.') + '&stage=session-readback');
+  }
+  if (!req.user.accessToken && !(Array.isArray(req.user.guilds) && req.user.guilds.length > 0)) {
+    return res.redirect('/login?error=' + encodeURIComponent('Discord login finished, but the Discord access token was not saved. Please sign in again.') + '&stage=missing-token');
+  }
+  return res.redirect('/dashboard');
 });
 
 app.get('/logout', function (req, res) {
